@@ -212,10 +212,11 @@ install_plugin() {
   echo ""
   echo "Adding the Tempus plugin marketplace..."
 
-  if ! claude plugin marketplace add grovertempus/tempus-claude 2>/dev/null; then
-    die "Could not add the Tempus plugin marketplace."
+  claude plugin marketplace add grovertempus/tempus-claude 2>/dev/null || true
+  if ! claude plugin marketplace update tempus-claude 2>/dev/null; then
+    die "Could not refresh the Tempus plugin marketplace."
   fi
-  echo "✓ Tempus marketplace added"
+  echo "✓ Tempus marketplace ready"
 
   echo "Installing the Tempus Claude plugin..."
 
