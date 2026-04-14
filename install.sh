@@ -218,11 +218,79 @@ install_plugin() {
   echo "✓ Tempus marketplace added"
 
   echo "Installing the Tempus Claude plugin..."
+
+  # ─── Collect pre-install diagnostic context ────────────────────────────────
+  DIAG_LOG="/tmp/tempus-plugin-install.log"
+  {
+    echo "=== Tempus Plugin Install Diagnostics ==="
+    echo "Date: $(date -u)"
+    echo "macOS: $(sw_vers -productVersion 2>/dev/null || echo unknown)"
+    echo "HOME=$HOME"
+    echo "USER=$USER"
+    echo "PATH=$PATH"
+    echo ""
+    echo "=== claude --version ==="
+    claude --version 2>&1 || echo "(claude --version failed)"
+    echo ""
+    echo "=== claude plugin list ==="
+    claude plugin list 2>&1 || echo "(claude plugin list failed)"
+    echo ""
+    echo "=== claude plugin marketplace list ==="
+    claude plugin marketplace list 2>&1 || echo "(claude plugin marketplace list failed)"
+    echo ""
+    echo "=== ~/.claude (top-level) ==="
+    ls -la "$HOME/.claude" 2>&1 || echo "(~/.claude not found)"
+    echo ""
+    echo "=== ~/.claude/plugins ==="
+    ls -la "$HOME/.claude/plugins" 2>&1 || echo "(~/.claude/plugins not found)"
+    echo ""
+    echo "=== ~/.claude/marketplaces ==="
+    ls -la "$HOME/.claude/marketplaces" 2>&1 || echo "(~/.claude/marketplaces not found)"
+    echo ""
+    echo "=== ~/.claude/settings.json ==="
+    cat "$HOME/.claude/settings.json" 2>&1 || echo "(settings.json not found)"
+    echo ""
+    echo "=== plugin install: claude plugin install tempus-marketing@tempus-claude ==="
+  } > "$DIAG_LOG" 2>&1
+
+  # ─── Run plugin install, capturing full stdout+stderr ──────────────────────
   # Note: @tempus-claude is the marketplace name - this suffix is required and must not be removed
-  if ! claude plugin install tempus-marketing@tempus-claude 2>/dev/null; then
+  INSTALL_EXIT=0
+  INSTALL_OUT=$(claude plugin install tempus-marketing@tempus-claude 2>&1) || INSTALL_EXIT=$?
+  printf '%s\nExit code: %s\n' "$INSTALL_OUT" "$INSTALL_EXIT" >> "$DIAG_LOG"
+
+  if [ "$INSTALL_EXIT" -eq 0 ]; then
+    echo "✓ Tempus Claude plugin installed"
+    return 0
+  fi
+
+  # ─── Install failed — upload diagnostics as a public GitHub Gist ───────────
+  echo ""
+  echo "Collecting diagnostics for remote review..."
+
+  GIST_URL=""
+  if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+    GIST_URL=$(gh gist create --public \
+      --filename "tempus-install-diag.log" \
+      "$DIAG_LOG" 2>/dev/null | tail -1) || true
+  fi
+
+  if [ -n "$GIST_URL" ]; then
+    echo ""
+    echo "============================================="
+    echo "  Diagnostic log ready for Grover"
+    echo "============================================="
+    echo ""
+    echo "  $GIST_URL"
+    echo ""
+    echo "  Send this URL to: grover.richardson@tempus.com"
+    echo "  He can diagnose and fix the issue remotely."
+    echo "============================================="
+    echo ""
+    die "Could not install the Tempus Claude plugin. Send the URL above to Grover."
+  else
     die "Could not install the Tempus Claude plugin."
   fi
-  echo "✓ Tempus Claude plugin installed"
 }
 
 # ─── CLAUDE.md ───────────────────────────────────────────────────────────────
