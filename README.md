@@ -21,8 +21,10 @@ Once Grover has added you, run the one-line command below.
 Open **Terminal** (press `Command + Space`, type `Terminal`, press Enter) and paste this:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh | bash
+curl -fsSL -o /tmp/tempus-setup.sh https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh && bash /tmp/tempus-setup.sh
 ```
+
+Downloads the installer first, then runs it, so the installer has full access to your keyboard for the sign-in step.
 
 The installer will walk you through everything. Total time: about 5-10 minutes.
 

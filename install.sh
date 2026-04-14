@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 # Tempus Claude Code Setup
 # One-line install:
-#   curl -fsSL https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh | bash
+#   curl -fsSL -o /tmp/tempus-setup.sh https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh && bash /tmp/tempus-setup.sh
+
+set -euo pipefail
+
+if [ ! -t 0 ]; then
+  echo ""
+  echo "ERROR: This installer needs your keyboard for sign-in."
+  echo ""
+  echo "You ran it via a pipe, which blocks keyboard input. Instead, run:"
+  echo ""
+  echo "  curl -fsSL -o /tmp/tempus-setup.sh https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh && bash /tmp/tempus-setup.sh"
+  echo ""
+  exit 1
+fi
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -187,7 +200,7 @@ verify_repo_access() {
     echo "and re-run this installer once Grover adds you."
     echo "---------------------------------------------"
     echo ""
-    exit 0
+    die "You don't have access to grovertempus/tempus-claude yet. Email grover.richardson@tempus.com with your GitHub username so you can be added, then re-run this installer."
   fi
 
   echo "✓ Access to Tempus team tools confirmed"
@@ -205,6 +218,7 @@ install_plugin() {
   echo "✓ Tempus marketplace added"
 
   echo "Installing the Tempus Claude plugin..."
+  # Note: @tempus-claude is the marketplace name - this suffix is required and must not be removed
   if ! claude plugin install tempus-marketing@tempus-claude 2>/dev/null; then
     die "Could not install the Tempus Claude plugin."
   fi
