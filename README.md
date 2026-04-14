@@ -1,0 +1,41 @@
+# Tempus Claude Code Setup
+
+This is the one-click installer that gets your Mac set up with Claude Code and the Tempus team's shared AI workflow.
+
+## What you're installing
+
+- **Claude Code** - Anthropic's AI assistant that runs in your Terminal
+- **The Tempus plugin** - Grover's workflow setup: research-first sequencing, guardrails, plain-language defaults, and team-specific hooks
+
+## Before you start
+
+You'll need:
+1. A Mac (this does not work on Windows or Linux yet)
+2. A free [GitHub account](https://github.com/join) - you can make one during setup if you don't have one
+3. Your GitHub username sent to Grover at grover.richardson@tempus.com so he can grant you access
+
+Once Grover has added you, run the one-line command below.
+
+## Install
+
+Open **Terminal** (press `Command + Space`, type `Terminal`, press Enter) and paste this:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh | bash
+```
+
+The installer will walk you through everything. Total time: about 5-10 minutes.
+
+## After install
+
+Open a new Terminal window and type:
+
+```
+claude
+```
+
+That's it. Claude Code is ready.
+
+## Questions?
+
+Email Grover at grover.richardson@tempus.com

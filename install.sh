@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# Tempus Claude Code Setup
+# One-line install:
+#   curl -fsSL https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh | bash
+
+# ─── Helpers ────────────────────────────────────────────────────────────────
+
+print_banner() {
+  echo ""
+  echo "============================================="
+  echo "       Tempus Claude Code Setup"
+  echo "============================================="
+  echo ""
+  echo "This script sets up Claude Code on your Mac"
+  echo "so you can use the same AI workflow as the"
+  echo "rest of the Tempus marketing team."
+  echo ""
+  echo "Here's what's about to happen:"
+  echo "  1. Make sure your Mac is compatible"
+  echo "  2. Install Homebrew (a free Mac app installer)"
+  echo "  3. Install the GitHub CLI and Node.js"
+  echo "  4. Install Claude Code (Anthropic's AI tool)"
+  echo "  5. Sign in to GitHub to access team tools"
+  echo "  6. Install the Tempus Claude plugin"
+  echo ""
+  echo "This takes about 5-10 minutes on a fresh Mac."
+  echo "---------------------------------------------"
+  echo ""
+}
+
+print_success() {
+  echo ""
+  echo "============================================="
+  echo "   You're all set!"
+  echo "============================================="
+  echo ""
+  echo "Everything is installed and ready to go."
+  echo ""
+  echo "To start using Claude Code:"
+  echo ""
+  echo "  1. Open a NEW Terminal window"
+  echo "  2. Type:  claude"
+  echo "  3. Press Enter"
+  echo ""
+  echo "That's it. Claude Code will be ready to use."
+  echo ""
+  echo "Questions? Email grover.richardson@tempus.com"
+  echo "============================================="
+  echo ""
+}
+
+die() {
+  echo ""
+  echo "Something went wrong: $1"
+  echo ""
+  echo "Please take a screenshot of this screen and"
+  echo "email it to grover.richardson@tempus.com."
+  echo ""
+  exit 1
+}
+
+# ─── Checks ─────────────────────────────────────────────────────────────────
+
+check_macos() {
+  if [[ "$(uname)" != "Darwin" ]]; then
+    echo ""
+    echo "Sorry - this installer only works on a Mac."
+    echo "If you need help on a different computer, email"
+    echo "grover.richardson@tempus.com."
+    exit 1
+  fi
+}
+
+# ─── Installers ─────────────────────────────────────────────────────────────
+
+install_homebrew() {
+  if command -v brew &>/dev/null; then
+    echo "✓ Homebrew already installed"
+    return 0
+  fi
+
+  echo "Installing Homebrew (this can take a few minutes)..."
+  echo "(Homebrew is a free, trusted tool installer for Mac)"
+  echo ""
+
+  if ! /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+    die "Homebrew installation failed. Please try again."
+  fi
+
+  # Add brew to PATH for this session (Apple Silicon + Intel)
+  if [[ -d "/opt/homebrew/bin" ]]; then
+    export PATH="/opt/homebrew/bin:$PATH"
+  elif [[ -d "/usr/local/bin" ]]; then
+    export PATH="/usr/local/bin:$PATH"
+  fi
+
+  echo ""
+  echo "✓ Homebrew installed"
+}
+
+install_gh() {
+  if command -v gh &>/dev/null; then
+    echo "✓ GitHub CLI ready"
+    return 0
+  fi
+
+  echo "Installing the GitHub CLI..."
+  if ! brew install gh >/dev/null 2>&1; then
+    die "Could not install the GitHub CLI. Check your internet connection and try again."
+  fi
+  echo "✓ GitHub CLI ready"
+}
+
+install_node() {
+  if command -v node &>/dev/null; then
+    echo "✓ Node ready"
+    return 0
+  fi
+
+  echo "Installing Node.js (required by Claude Code)..."
+  if ! brew install node >/dev/null 2>&1; then
+    die "Could not install Node.js. Check your internet connection and try again."
+  fi
+  echo "✓ Node ready"
+}
+
+install_claude() {
+  if command -v claude &>/dev/null; then
+    echo "✓ Claude Code ready"
+    return 0
+  fi
+
+  echo "Installing Claude Code..."
+  if ! npm install -g @anthropic-ai/claude-code >/dev/null 2>&1; then
+    die "Could not install Claude Code. Check your internet connection and try again."
+  fi
+  echo "✓ Claude Code ready"
+}
+
+# ─── GitHub Auth ─────────────────────────────────────────────────────────────
+
+setup_github_auth() {
+  if gh auth status &>/dev/null; then
+    echo "✓ GitHub account connected"
+    return 0
+  fi
+
+  echo ""
+  echo "---------------------------------------------"
+  echo "Next: Connect your GitHub account"
+  echo ""
+  echo "We need to connect to GitHub so we can pull"
+  echo "the Tempus team tools into Claude Code."
+  echo ""
+  echo "We're going to open your browser so you can"
+  echo "sign in to GitHub. This is a free account  - "
+  echo "if you don't have one, you can create it on"
+  echo "the page that opens."
+  echo "---------------------------------------------"
+  echo ""
+
+  if ! gh auth login --web --hostname github.com --git-protocol https; then
+    die "GitHub sign-in did not complete. Try running this installer again."
+  fi
+
+  echo "✓ GitHub account connected"
+}
+
+# ─── Repo Access ─────────────────────────────────────────────────────────────
+
+verify_repo_access() {
+  echo ""
+  echo "Checking your access to Tempus team tools..."
+
+  if ! gh repo view grovertempus/tempus-claude &>/dev/null; then
+    echo ""
+    echo "---------------------------------------------"
+    echo "Access not set up yet!"
+    echo ""
+    echo "You need to be added to the Tempus tools repo"
+    echo "before the installer can continue."
+    echo ""
+    echo "To find your GitHub username, run this command:"
+    echo "  gh api user --jq .login"
+    echo ""
+    echo "Then send it to: grover.richardson@tempus.com"
+    echo "and re-run this installer once Grover adds you."
+    echo "---------------------------------------------"
+    echo ""
+    exit 0
+  fi
+
+  echo "✓ Access to Tempus team tools confirmed"
+}
+
+# ─── Plugin Install ──────────────────────────────────────────────────────────
+
+install_plugin() {
+  echo ""
+  echo "Adding the Tempus plugin marketplace..."
+
+  if ! claude plugin marketplace add grovertempus/tempus-claude 2>/dev/null; then
+    die "Could not add the Tempus plugin marketplace."
+  fi
+  echo "✓ Tempus marketplace added"
+
+  echo "Installing the Tempus Claude plugin..."
+  if ! claude plugin install tempus-marketing@tempus-claude 2>/dev/null; then
+    die "Could not install the Tempus Claude plugin."
+  fi
+  echo "✓ Tempus Claude plugin installed"
+}
+
+# ─── CLAUDE.md ───────────────────────────────────────────────────────────────
+
+setup_claude_md() {
+  PLUGIN_CLAUDE_MD="$HOME/.claude/plugins/tempus-claude/tempus-marketing/CLAUDE.md"
+  DEST_CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+
+  if [[ ! -f "$PLUGIN_CLAUDE_MD" ]]; then
+    echo ""
+    echo "Note: Plugin CLAUDE.md not found yet - skipping"
+    echo "that step. This is normal on a first install."
+    return 0
+  fi
+
+  if [[ -f "$DEST_CLAUDE_MD" ]]; then
+    BACKUP="$HOME/.claude/CLAUDE.md.backup-$(date +%s)"
+    echo ""
+    echo "Note: You already have a CLAUDE.md file."
+    echo "It has been backed up to:"
+    echo "  $BACKUP"
+    cp "$DEST_CLAUDE_MD" "$BACKUP"
+  fi
+
+  cp "$PLUGIN_CLAUDE_MD" "$DEST_CLAUDE_MD"
+  echo "✓ CLAUDE.md configured"
+}
+
+# ─── Auto-Update ─────────────────────────────────────────────────────────────
+
+setup_autoupdate() {
+  ZSHRC="$HOME/.zshrc"
+
+  if grep -q "FORCE_AUTOUPDATE_PLUGINS" "$ZSHRC" 2>/dev/null; then
+    echo "✓ Auto-update already configured"
+    return 0
+  fi
+
+  {
+    echo ""
+    echo "# Tempus Claude Code - keep plugins auto-updated"
+    echo "export FORCE_AUTOUPDATE_PLUGINS=1"
+  } >> "$ZSHRC"
+
+  echo "✓ Auto-update configured"
+  echo ""
+  echo "  Note: To activate this, open a new Terminal"
+  echo "  window before using Claude Code."
+}
+
+# ─── Main ────────────────────────────────────────────────────────────────────
+
+print_banner
+check_macos
+install_homebrew
+install_gh
+install_node
+install_claude
+setup_github_auth
+verify_repo_access
+install_plugin
+setup_claude_md
+setup_autoupdate
+print_success
