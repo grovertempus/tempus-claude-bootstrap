@@ -206,6 +206,22 @@ verify_repo_access() {
   echo "✓ Access to Tempus team tools confirmed"
 }
 
+# ─── Backup ──────────────────────────────────────────────────────────────────
+
+backup_existing_setup() {
+  if [[ ! -d "$HOME/.claude" ]]; then
+    return 0
+  fi
+
+  BACKUP_DIR="$HOME/.claude-backup-$(date +%s)"
+  echo ""
+  echo "Backing up your existing Claude setup..."
+  rsync -a --exclude="plugins/" "$HOME/.claude/" "$BACKUP_DIR/" 2>/dev/null \
+    || cp -R "$HOME/.claude" "$BACKUP_DIR"
+  echo "✓ Backup saved to: $BACKUP_DIR"
+  echo "  (This is a safety copy — it won't affect anything.)"
+}
+
 # ─── Plugin Install ──────────────────────────────────────────────────────────
 
 install_plugin() {
@@ -340,13 +356,10 @@ setup_claude_md() {
     return 0
   fi
 
-  # Case 3: Existing CLAUDE.md without markers - back it up and prepend plugin content
-  BACKUP="$HOME/.claude/CLAUDE.md.backup-$(date +%s)"
+  # Case 3: Existing CLAUDE.md without markers - prepend plugin content (full backup already done)
   echo ""
   echo "Note: You already have a personal instructions file."
-  echo "Your original has been saved as a backup at:"
-  echo "  $BACKUP"
-  cp "$DEST_CLAUDE_MD" "$BACKUP"
+  echo "It's been preserved in your backup from the start of this install."
 
   EXISTING_CONTENT="$(cat "$DEST_CLAUDE_MD")"
   {
@@ -394,6 +407,7 @@ install_node
 install_claude
 setup_github_auth
 verify_repo_access
+backup_existing_setup
 install_plugin
 setup_claude_md
 setup_autoupdate
