@@ -299,25 +299,67 @@ install_plugin() {
 setup_claude_md() {
   PLUGIN_CLAUDE_MD="$HOME/.claude/plugins/tempus-claude/tempus-marketing/CLAUDE.md"
   DEST_CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+  START_MARKER="<!-- TEMPUS-PLUGIN-START -->"
+  END_MARKER="<!-- TEMPUS-PLUGIN-END -->"
 
   if [[ ! -f "$PLUGIN_CLAUDE_MD" ]]; then
     echo ""
-    echo "Note: Plugin CLAUDE.md not found yet - skipping"
+    echo "Note: Plugin instructions not found yet - skipping"
     echo "that step. This is normal on a first install."
     return 0
   fi
 
-  if [[ -f "$DEST_CLAUDE_MD" ]]; then
-    BACKUP="$HOME/.claude/CLAUDE.md.backup-$(date +%s)"
-    echo ""
-    echo "Note: You already have a CLAUDE.md file."
-    echo "It has been backed up to:"
-    echo "  $BACKUP"
-    cp "$DEST_CLAUDE_MD" "$BACKUP"
+  PLUGIN_CONTENT="$(cat "$PLUGIN_CLAUDE_MD")"
+
+  # Case 1: No existing CLAUDE.md - create fresh with markers
+  if [[ ! -f "$DEST_CLAUDE_MD" ]]; then
+    {
+      echo "$START_MARKER"
+      printf '%s\n' "$PLUGIN_CONTENT"
+      echo "$END_MARKER"
+    } > "$DEST_CLAUDE_MD"
+    echo "✓ Instructions file created"
+    return 0
   fi
 
-  cp "$PLUGIN_CLAUDE_MD" "$DEST_CLAUDE_MD"
-  echo "✓ CLAUDE.md configured"
+  # Case 2: Markers already exist - update only the plugin section (idempotent re-run)
+  if grep -q "$START_MARKER" "$DEST_CLAUDE_MD"; then
+    # Extract everything before the start marker and after the end marker
+    BEFORE_MARKER="$(awk "/$START_MARKER/{exit} {print}" "$DEST_CLAUDE_MD")"
+    AFTER_MARKER="$(awk "found && /$END_MARKER/{found=0} found{print} /$END_MARKER/{found=1}" "$DEST_CLAUDE_MD")"
+    {
+      [[ -n "$BEFORE_MARKER" ]] && printf '%s\n' "$BEFORE_MARKER"
+      echo "$START_MARKER"
+      printf '%s\n' "$PLUGIN_CONTENT"
+      echo "$END_MARKER"
+      if [[ -n "$AFTER_MARKER" ]]; then
+        printf '\n%s\n' "$AFTER_MARKER"
+      fi
+    } > "$DEST_CLAUDE_MD"
+    echo "✓ Instructions updated"
+    return 0
+  fi
+
+  # Case 3: Existing CLAUDE.md without markers - back it up and prepend plugin content
+  BACKUP="$HOME/.claude/CLAUDE.md.backup-$(date +%s)"
+  echo ""
+  echo "Note: You already have a personal instructions file."
+  echo "Your original has been saved as a backup at:"
+  echo "  $BACKUP"
+  cp "$DEST_CLAUDE_MD" "$BACKUP"
+
+  EXISTING_CONTENT="$(cat "$DEST_CLAUDE_MD")"
+  {
+    echo "$START_MARKER"
+    printf '%s\n' "$PLUGIN_CONTENT"
+    echo "$END_MARKER"
+    if [[ -n "$EXISTING_CONTENT" ]]; then
+      echo ""
+      echo "# Your Custom Instructions"
+      echo "$EXISTING_CONTENT"
+    fi
+  } > "$DEST_CLAUDE_MD"
+  echo "✓ Instructions merged — your custom settings are preserved below"
 }
 
 # ─── Auto-Update ─────────────────────────────────────────────────────────────
