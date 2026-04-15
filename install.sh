@@ -234,6 +234,9 @@ install_plugin() {
   fi
   echo "✓ Tempus marketplace ready"
 
+  # Clean up any previous installation to prevent duplicate registrations
+  claude plugin uninstall tempus-marketing@tempus-claude 2>/dev/null || true
+
   echo "Installing the Tempus Claude plugin..."
 
   # ─── Collect pre-install diagnostic context ────────────────────────────────
@@ -278,6 +281,15 @@ install_plugin() {
 
   if [ "$INSTALL_EXIT" -eq 0 ]; then
     echo "✓ Tempus Claude plugin installed"
+
+    # Verify plugin is properly registered
+    if ! claude plugin list 2>/dev/null | grep -q "tempus-marketing.*enabled"; then
+      echo ""
+      echo "Warning: Plugin installed but may not be active."
+      echo "Try running: claude plugin install tempus-marketing@tempus-claude"
+      echo "If that doesn't work, email grover.richardson@tempus.com"
+    fi
+
     return 0
   fi
 
