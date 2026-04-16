@@ -38,6 +38,20 @@ For the full Tempus Claude Code toolkit with the marketing plugin, agents, hooks
 2. A free [GitHub account](https://github.com/join)
 3. [Request access](https://github.com/grovertempus/tempus-claude-bootstrap/issues/new?template=access-request.md) to the Tempus tools repo. Grover will add you, usually within a business day.
 
+### Get admin access first
+
+You'll need temporary admin access to install Homebrew (a tool our setup needs). Tempus has an Admin by Request tool for this:
+
+1. Click the **Admin by Request** icon in your Mac menu bar (top right corner, looks like a circle with a checkmark)
+2. Click **Request administrator access**
+3. Click **Yes** on the "Do you want to start an administrator session?" popup
+4. Fill out the form:
+   - **Email:** your Tempus email
+   - **Reason:** `I need admin access to install Homebrew. It's required so that I can set up skills in Claude Code and automatically download skill files from Tempus GitHub.`
+5. Click **OK** and wait for approval. You'll get an email when you're approved.
+
+Once you have admin access, run the install command below.
+
 **Run this in Terminal** once Grover has added you:
 
 ```bash
