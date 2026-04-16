@@ -92,8 +92,13 @@ check_macos() {
 # ─── VS Code ─────────────────────────────────────────────────────────────────
 
 install_vscode() {
+  # Check if VS Code is already installed anywhere
   if [[ -d "/Applications/Visual Studio Code.app" ]]; then
     echo "✓ VS Code already installed"
+    VSCODE_APP="/Applications/Visual Studio Code.app"
+  elif [[ -d "$HOME/Applications/Visual Studio Code.app" ]]; then
+    echo "✓ VS Code already installed"
+    VSCODE_APP="$HOME/Applications/Visual Studio Code.app"
   else
     echo "Downloading VS Code..."
     curl -fsSL -o /tmp/VSCode-universal.zip \
@@ -104,21 +109,31 @@ install_vscode() {
     unzip -q /tmp/VSCode-universal.zip -d /tmp/ \
       || die "Could not unzip VS Code. Try again."
 
-    mv "/tmp/Visual Studio Code.app" /Applications/ \
-      || die "Could not move VS Code to Applications. You may need to do this step manually."
+    # Remove macOS quarantine flag so Gatekeeper doesn't block it
+    xattr -cr "/tmp/Visual Studio Code.app" 2>/dev/null
+
+    # Try /Applications first, fall back to ~/Applications
+    if mv "/tmp/Visual Studio Code.app" /Applications/ 2>/dev/null; then
+      VSCODE_APP="/Applications/Visual Studio Code.app"
+    else
+      echo "  (Can't write to /Applications — using ~/Applications instead)"
+      mkdir -p "$HOME/Applications"
+      mv "/tmp/Visual Studio Code.app" "$HOME/Applications/" \
+        || die "Could not install VS Code. Try dragging it to your Applications folder manually."
+      VSCODE_APP="$HOME/Applications/Visual Studio Code.app"
+    fi
 
     rm -f /tmp/VSCode-universal.zip
-
     echo "✓ VS Code installed"
   fi
 
-  # Resolve the `code` CLI
+  # Resolve the code CLI
   if command -v code &>/dev/null; then
     CODE_CLI="code"
-  elif [[ -x "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" ]]; then
-    CODE_CLI="/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+  elif [[ -x "$VSCODE_APP/Contents/Resources/app/bin/code" ]]; then
+    CODE_CLI="$VSCODE_APP/Contents/Resources/app/bin/code"
   else
-    die "Could not find the VS Code command-line tool. Try opening VS Code and running 'Shell Command: Install code command in PATH' from the command palette."
+    die "Could not find the VS Code command-line tool. Try opening VS Code first, then run this installer again."
   fi
 }
 
