@@ -18,7 +18,7 @@ For building Tempus presentations with Claude Code in VS Code. No GitHub account
 curl -fsSL -o /tmp/tempus-setup.sh https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install-deck-designer.sh && bash /tmp/tempus-setup.sh
 ```
 
-After it finishes, open VS Code, click the Anthropic Logo, sign in with **Anthropic Console**, and type `/deck-designer` to start.
+After it finishes, open VS Code, click the Anthropic Logo located in the left-hand sidebar, sign in with **Anthropic Console**, and type `/deck-designer` to start.
 
 ---
 
