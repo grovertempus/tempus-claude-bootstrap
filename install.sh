@@ -154,18 +154,22 @@ setup_decks_folder() {
 
 # ─── Deck Designer Skill ─────────────────────────────────────────────────────
 
-download_skill() {
-  if [[ -f "$HOME/Desktop/Tempus-Decks/SKILL.md" ]]; then
-    echo "✓ Deck Designer skill file ready"
+install_skill() {
+  SKILL_DIR="$HOME/.claude/skills/deck-designer"
+
+  if [[ -f "$SKILL_DIR/SKILL.md" ]]; then
+    echo "✓ Deck Designer skill already installed"
     return 0
   fi
 
+  mkdir -p "$SKILL_DIR"
+
   curl -fsSL \
-    -o "$HOME/Desktop/Tempus-Decks/SKILL.md" \
+    -o "$SKILL_DIR/SKILL.md" \
     "https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/SKILL.md" \
     || die "Could not download the Deck Designer skill file. Check your internet connection and try again."
 
-  echo "✓ Deck Designer skill file ready"
+  echo "✓ Deck Designer skill installed (/deck-designer)"
 }
 
 # ─── Main ────────────────────────────────────────────────────────────────────
@@ -175,5 +179,5 @@ check_macos
 install_vscode
 install_claude_ext
 setup_decks_folder
-download_skill
+install_skill
 print_success
