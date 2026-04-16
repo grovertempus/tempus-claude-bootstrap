@@ -1,42 +1,54 @@
 # Tempus Claude Code Setup
 
-This is the one-click installer that gets your Mac set up with Claude Code and the Tempus team's shared AI workflow.
+One-command installers for Claude Code on your Mac. Pick the one that fits your needs.
 
-## What you're installing
+## Option 1: Deck Designer Only
 
-- **Claude Code** - Anthropic's AI assistant that runs in your Terminal
-- **The Tempus plugin** - Grover's workflow setup: research-first sequencing, guardrails, plain-language defaults, and team-specific hooks
+For building Tempus presentations with Claude Code in VS Code. No GitHub account needed, no extra setup.
 
-## Before you start
+**What it installs:**
+- VS Code
+- Claude Code extension
+- Deck Designer skill (/deck-designer)
+- Tempus-Decks folder on your Desktop
 
-You'll need:
-1. A Mac (this does not work on Windows or Linux yet)
-2. A free [GitHub account](https://github.com/join) - you can make one during setup if you don't have one
-3. Open an access request: [Request access here](https://github.com/grovertempus/tempus-claude-bootstrap/issues/new?template=access-request.md). Grover will add you as a collaborator, usually within a business day.
+**Run this in Terminal** (press Cmd+Space, type "Terminal", press Enter):
 
-Once Grover has added you, run the one-line command below.
+```bash
+curl -fsSL -o /tmp/tempus-setup.sh https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install-deck-designer.sh && bash /tmp/tempus-setup.sh
+```
 
-## Install
+After it finishes, open VS Code, click the sparkle icon, sign in with **Anthropic Console**, and type `/deck-designer` to start.
 
-Open **Terminal** (press `Command + Space`, type `Terminal`, press Enter) and paste this:
+---
+
+## Option 2: Full Setup
+
+For the full Tempus Claude Code toolkit with the marketing plugin, agents, hooks, and deck designer.
+
+**What it installs:**
+- Everything in Option 1, plus:
+- Claude Code CLI (terminal access)
+- GitHub CLI
+- Tempus marketing plugin (agents, hooks, workflows)
+- Auto-updates
+
+**Before you start:**
+1. You need a Mac
+2. A free [GitHub account](https://github.com/join)
+3. [Request access](https://github.com/grovertempus/tempus-claude-bootstrap/issues/new?template=access-request.md) to the Tempus tools repo. Grover will add you, usually within a business day.
+
+**Run this in Terminal** once Grover has added you:
 
 ```bash
 curl -fsSL -o /tmp/tempus-setup.sh https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh && bash /tmp/tempus-setup.sh
 ```
 
-Downloads the installer first, then runs it, so the installer has full access to your keyboard for the sign-in step.
+The installer walks you through everything. About 5-10 minutes.
 
-The installer will walk you through everything. Total time: about 5-10 minutes.
+After it finishes, open VS Code, click the sparkle icon, and sign in with **Anthropic Console**.
 
-## After install
-
-Open a new Terminal window and type:
-
-```
-claude
-```
-
-That's it. Claude Code is ready.
+---
 
 ## Questions?
 
