@@ -12,7 +12,7 @@ This is the one-click installer that gets your Mac set up with Claude Code and t
 You'll need:
 1. A Mac (this does not work on Windows or Linux yet)
 2. A free [GitHub account](https://github.com/join) - you can make one during setup if you don't have one
-3. Your GitHub username sent to Grover at grover.richardson@tempus.com so he can grant you access
+3. Open an access request: [Request access here](https://github.com/grovertempus/tempus-claude-bootstrap/issues/new?template=access-request.md). Grover will add you as a collaborator, usually within a business day.
 
 Once Grover has added you, run the one-line command below.
 
