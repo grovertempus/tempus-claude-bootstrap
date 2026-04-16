@@ -147,6 +147,74 @@ Before rendering the .pptx, print a title-only summary of every slide in order �
 
 If the argument does not hold on titles alone, revise titles and re-run the self-check before building.
 
+### Final fidelity audit
+
+After each slide is cloned AND again after all slides are saved, run this audit to confirm the template's formatting survived. Only text content is allowed to differ; every other attribute must match the source template slide exactly.
+
+**What to compare:**
+- Per text run: `font.name`, `font.size`, `font.bold`, `font.italic`, `font.underline`, `font.color.rgb` (when present)
+- Per paragraph: `alignment`, `level` (indent), `line_spacing`
+- Per shape: `left`, `top`, `width`, `height`, `rotation`
+- Layout: `slide.slide_layout.name` matches the expected layout
+- Character counts: body copy within layout character limits per the Character Count Guidelines above (now validated mechanically)
+
+**What is allowed to differ:** Text content (the string value only). Nothing else.
+
+**Audit function (embed in the build script):**
+
+```python
+def audit_clone_fidelity(src_slide, dest_slide, slide_idx):
+    """Compare dest_slide's non-content attributes against src_slide. Raise on drift."""
+    failures = []
+
+    # Layout sanity
+    if dest_slide.slide_layout.name != src_slide.slide_layout.name:
+        failures.append(
+            f"layout drift: src={src_slide.slide_layout.name!r} "
+            f"dest={dest_slide.slide_layout.name!r}"
+        )
+
+    src_shapes = list(src_slide.shapes)
+    dest_shapes = list(dest_slide.shapes)
+    if len(src_shapes) != len(dest_shapes):
+        failures.append(
+            f"shape count drift: src={len(src_shapes)} dest={len(dest_shapes)}"
+        )
+
+    for i, (s, d) in enumerate(zip(src_shapes, dest_shapes)):
+        # Geometry
+        for attr in ("left", "top", "width", "height"):
+            if getattr(s, attr, None) != getattr(d, attr, None):
+                failures.append(f"shape {i} {attr} drift")
+
+        # Text formatting (if both have text frames)
+        if not (s.has_text_frame and d.has_text_frame):
+            continue
+        for pi, (sp, dp) in enumerate(
+            zip(s.text_frame.paragraphs, d.text_frame.paragraphs)
+        ):
+            if sp.alignment != dp.alignment:
+                failures.append(f"shape {i} para {pi} alignment drift")
+            for ri, (sr, dr) in enumerate(zip(sp.runs, dp.runs)):
+                for attr in ("name", "size", "bold", "italic", "underline"):
+                    if getattr(sr.font, attr) != getattr(dr.font, attr):
+                        failures.append(
+                            f"shape {i} para {pi} run {ri} font.{attr} drift"
+                        )
+
+    if failures:
+        raise RuntimeError(
+            f"Slide {slide_idx+1} fidelity audit failed:\n  "
+            + "\n  ".join(failures)
+        )
+```
+
+**Character-count enforcement:** Extend the probe to check each text frame's character count against the layout's documented limit from the Character Count Guidelines. Fail loud if exceeded.
+
+**When to run:** Immediately after each slide is cloned, AND again after all slides are saved (open the finished .pptx and audit against the template). Two probes catch both in-memory drift and file-round-trip drift.
+
+**Failure policy:** Any audit failure raises `RuntimeError` — build stops, the user sees which slide, which shape, and which attribute drifted. No silent pass when formatting has changed.
+
 ### CRITICAL: Use python-pptx
 
 **ALWAYS use the `python-pptx` library to build the deck.** Do NOT manually unzip/edit XML/rezip. Manual XML editing produces broken files with dangling references, missing content types, and corrupted relationships. `python-pptx` handles all internal bookkeeping correctly.
@@ -180,6 +248,53 @@ def clone_slide(prs, source_index):
         new_slide.shapes._spTree.append(deepcopy(sp._element))
     return new_slide
 ```
+
+### Cloning slides safely (picture-relationship handling)
+
+Naive `deepcopy` of shape XML copies `r:embed="rId…"` attributes verbatim — but those relationship IDs only exist in the **source** slide's rels file. The destination slide has no matching entry, so every picture shape in the clone renders as a broken reference (empty box or red X). (Sources: robintw GitHub Gist; python-pptx issue #132)
+
+**Pattern A — deepcopy + relationship replay (required for same-presentation clones):**
+
+```python
+from copy import deepcopy
+
+def clone_slide_safe(src_slide, dest_slide):
+    for shape in src_slide.shapes:
+        new_el = deepcopy(shape.element)
+        dest_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
+
+    for rel in src_slide.part.rels.values():
+        # Skip external and notesSlide rels
+        if rel.is_external or rel.reltype.endswith('/notesSlide'):
+            continue
+        dest_slide.part.rels.add_relationship(
+            rel.reltype, rel.target_part, rel.rId
+        )
+```
+
+The key is `rel.target_part` — passing the `ImagePart` object (not a new copy) re-registers the existing image under the same `rId` the copied XML expects. This works within a single presentation because `ImagePart` objects are deduplicated by SHA1 hash across the package.
+
+**Pattern B fallback — when rel copy is impractical (cross-presentation moves):** Rebuild picture shapes via `dest.shapes.add_picture(io.BytesIO(shape.image.blob), left, top, width, height)`. This guarantees valid references but loses crop, shadow, and alt-text. Use only when Pattern A is unavailable.
+
+**Post-build picture-ref validation probe (run after each clone):**
+
+```python
+from pptx.enum.shapes import MSO_SHAPE_TYPE
+for slide_idx, slide in enumerate(prs.slides):
+    for shape in slide.shapes:
+        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            try:
+                _ = shape.image.blob
+                _ = shape.image.content_type
+            except KeyError:
+                raise RuntimeError(
+                    f"Slide {slide_idx+1}: broken picture ref for "
+                    f"shape id={shape.shape_id}. Clone did not copy "
+                    f"image relationship. Fix clone_slide_safe()."
+                )
+```
+
+Run this probe before saving. If it raises, the build fails loudly instead of producing a silently broken .pptx.
 
 **Step 3: Edit text content.** For each cloned slide, replace placeholder text:
 
@@ -311,3 +426,6 @@ Additional constraints:
 - Do not write bullets longer than 12 words. If a bullet exceeds 12 words, it is a sentence — format it as one.
 - Do not skip the skimmability audit. Print the action-title-only summary and confirm the argument holds before building.
 - Do not build the deck before the user explicitly approves the copy in Phase 1.5. Approval of the slide structure in Phase 1 is not approval of the copy.
+- Do not `deepcopy` slide shape XML without also replaying relationships. Picture shapes will render broken.
+- Do not skip the final fidelity audit. The build is not done until the audit passes. Every font, size, color, and position from the template must be preserved; only copy content may differ.
+- Do not overwrite template formatting when writing copy. Use `run.text = '...'` to replace text while leaving `run.font.*` intact. Avoid replacing entire runs or paragraphs unless re-applying all formatting.
