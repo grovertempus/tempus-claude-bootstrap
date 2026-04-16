@@ -26,6 +26,8 @@ After it finishes, open VS Code, click the sparkle icon, sign in with **Anthropi
 
 For the full Tempus Claude Code toolkit with the marketing plugin, agents, hooks, and deck designer.
 
+Curious what Claude will be like to work with? See [ABOUT.md](./ABOUT.md) for the personality, guardrails, and team of specialized agents included.
+
 **What it installs:**
 - Everything in Option 1, plus:
 - Claude Code CLI (terminal access)
