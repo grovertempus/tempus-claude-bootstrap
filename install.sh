@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Tempus Claude Code Setup
+# Tempus Deck Designer Setup
 # One-line install:
 #   curl -fsSL -o /tmp/tempus-setup.sh https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/install.sh && bash /tmp/tempus-setup.sh
 
 set -euo pipefail
+
+# ─── Pipe Detection ──────────────────────────────────────────────────────────
 
 if [ ! -t 0 ]; then
   echo ""
@@ -16,49 +18,58 @@ if [ ! -t 0 ]; then
   exit 1
 fi
 
-# ─── Helpers ────────────────────────────────────────────────────────────────
+# ─── Global Variables ────────────────────────────────────────────────────────
+
+CODE_CLI="code"
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
 
 print_banner() {
   echo ""
   echo "============================================="
-  echo "       Tempus Claude Code Setup"
+  echo "       Tempus Deck Designer Setup"
   echo "============================================="
   echo ""
-  echo "This script sets up Claude Code on your Mac"
-  echo "so you can use the same AI workflow as the"
-  echo "rest of the Tempus marketing team."
+  echo "This script sets up everything you need to"
+  echo "build Tempus presentations using Claude Code"
+  echo "in VS Code."
   echo ""
   echo "Here's what's about to happen:"
-  echo "  1. Make sure your Mac is compatible"
-  echo "  2. Install Homebrew (a free Mac app installer)"
-  echo "  3. Install the GitHub CLI and Node.js"
-  echo "  4. Install Claude Code (Anthropic's AI tool)"
-  echo "  5. Sign in to GitHub to access team tools"
-  echo "  6. Install the Tempus Claude plugin"
+  echo "  1. Check Mac compatibility"
+  echo "  2. Install VS Code"
+  echo "  3. Install Claude Code extension"
+  echo "  4. Set up your Decks folder"
+  echo "  5. Download the Deck Designer skill"
   echo ""
-  echo "This takes about 5-10 minutes on a fresh Mac."
+  echo "This takes about 5 minutes."
   echo "---------------------------------------------"
   echo ""
 }
 
 print_success() {
   echo ""
-  echo "============================================="
-  echo "   You're all set!"
-  echo "============================================="
+  echo "============================================"
+  echo "   You're almost there!"
+  echo "============================================"
   echo ""
-  echo "Everything is installed and ready to go."
+  echo "Everything is installed. Now just sign in:"
   echo ""
-  echo "To start using Claude Code:"
+  echo "  1. Open VS Code"
+  echo "  2. Click the sparkle icon (✦) in the left sidebar"
+  echo "  3. When asked how to sign in, select:"
+  echo "     \"Anthropic Console\" (API usage billing)"
   echo ""
-  echo "  1. Open a NEW Terminal window"
-  echo "  2. Type:  claude"
-  echo "  3. Press Enter"
+  echo "     Do NOT select a personal Claude account."
+  echo "     Tempus uses the Console for billing."
   echo ""
-  echo "That's it. Claude Code will be ready to use."
+  echo "  4. Click \"Authorize\" in the browser window"
+  echo "  5. Close the browser tab and go back to VS Code"
+  echo ""
+  echo "After signing in, follow the Deck Designer SOP"
+  echo "starting from \"Install the Skill.\""
   echo ""
   echo "Questions? Email grover.richardson@tempus.com"
-  echo "============================================="
+  echo "============================================"
   echo ""
 }
 
@@ -72,7 +83,7 @@ die() {
   exit 1
 }
 
-# ─── Checks ─────────────────────────────────────────────────────────────────
+# ─── Checks ──────────────────────────────────────────────────────────────────
 
 check_macos() {
   if [[ "$(uname)" != "Darwin" ]]; then
@@ -84,341 +95,85 @@ check_macos() {
   fi
 }
 
-# ─── Installers ─────────────────────────────────────────────────────────────
+# ─── VS Code ─────────────────────────────────────────────────────────────────
 
-install_homebrew() {
-  if command -v brew &>/dev/null; then
-    echo "✓ Homebrew already installed"
-    return 0
-  fi
-
-  echo "Installing Homebrew (this can take a few minutes)..."
-  echo "(Homebrew is a free, trusted tool installer for Mac)"
-  echo ""
-
-  if ! /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
-    die "Homebrew installation failed. Please try again."
-  fi
-
-  # Add brew to PATH for this session (Apple Silicon + Intel)
-  if [[ -d "/opt/homebrew/bin" ]]; then
-    export PATH="/opt/homebrew/bin:$PATH"
-  elif [[ -d "/usr/local/bin" ]]; then
-    export PATH="/usr/local/bin:$PATH"
-  fi
-
-  echo ""
-  echo "✓ Homebrew installed"
-}
-
-install_gh() {
-  if command -v gh &>/dev/null; then
-    echo "✓ GitHub CLI ready"
-    return 0
-  fi
-
-  echo "Installing the GitHub CLI..."
-  if ! brew install gh >/dev/null 2>&1; then
-    die "Could not install the GitHub CLI. Check your internet connection and try again."
-  fi
-  echo "✓ GitHub CLI ready"
-}
-
-install_node() {
-  if command -v node &>/dev/null; then
-    echo "✓ Node ready"
-    return 0
-  fi
-
-  echo "Installing Node.js (required by Claude Code)..."
-  if ! brew install node >/dev/null 2>&1; then
-    die "Could not install Node.js. Check your internet connection and try again."
-  fi
-  echo "✓ Node ready"
-}
-
-install_claude() {
-  if command -v claude &>/dev/null; then
-    echo "✓ Claude Code ready"
-    return 0
-  fi
-
-  echo "Installing Claude Code..."
-  if ! npm install -g @anthropic-ai/claude-code >/dev/null 2>&1; then
-    die "Could not install Claude Code. Check your internet connection and try again."
-  fi
-  echo "✓ Claude Code ready"
-}
-
-# ─── GitHub Auth ─────────────────────────────────────────────────────────────
-
-setup_github_auth() {
-  if gh auth status &>/dev/null; then
-    echo "✓ GitHub account connected"
-    return 0
-  fi
-
-  echo ""
-  echo "---------------------------------------------"
-  echo "Next: Connect your GitHub account"
-  echo ""
-  echo "We need to connect to GitHub so we can pull"
-  echo "the Tempus team tools into Claude Code."
-  echo ""
-  echo "We're going to open your browser so you can"
-  echo "sign in to GitHub. This is a free account  - "
-  echo "if you don't have one, you can create it on"
-  echo "the page that opens."
-  echo "---------------------------------------------"
-  echo ""
-
-  if ! gh auth login --web --hostname github.com --git-protocol https; then
-    die "GitHub sign-in did not complete. Try running this installer again."
-  fi
-
-  echo "✓ GitHub account connected"
-}
-
-# ─── Repo Access ─────────────────────────────────────────────────────────────
-
-verify_repo_access() {
-  echo ""
-  echo "Checking your access to Tempus team tools..."
-
-  if ! gh repo view grovertempus/tempus-claude &>/dev/null; then
-    echo ""
-    echo "---------------------------------------------"
-    echo "Access not set up yet!"
-    echo ""
-    echo "You don't have access to grovertempus/tempus-claude yet."
-    echo ""
-    echo "Request access here:"
-    echo "  https://github.com/grovertempus/tempus-claude-bootstrap/issues/new?template=access-request.md"
-    echo ""
-    echo "Once Grover adds you, re-run this installer."
-    echo "---------------------------------------------"
-    echo ""
-    die "You don't have access to grovertempus/tempus-claude yet. Request access at https://github.com/grovertempus/tempus-claude-bootstrap/issues/new?template=access-request.md and re-run this installer once Grover adds you."
-  fi
-
-  echo "✓ Access to Tempus team tools confirmed"
-}
-
-# ─── Backup ──────────────────────────────────────────────────────────────────
-
-backup_existing_setup() {
-  if [[ ! -d "$HOME/.claude" ]]; then
-    return 0
-  fi
-
-  BACKUP_DIR="$HOME/.claude-backup-$(date +%s)"
-  echo ""
-  echo "Backing up your existing Claude setup..."
-  rsync -a --exclude="plugins/" "$HOME/.claude/" "$BACKUP_DIR/" 2>/dev/null \
-    || cp -R "$HOME/.claude" "$BACKUP_DIR"
-  echo "✓ Backup saved to: $BACKUP_DIR"
-  echo "  (This is a safety copy — it won't affect anything.)"
-}
-
-# ─── Plugin Install ──────────────────────────────────────────────────────────
-
-install_plugin() {
-  echo ""
-  echo "Adding the Tempus plugin marketplace..."
-
-  claude plugin marketplace add grovertempus/tempus-claude 2>/dev/null || true
-  if ! claude plugin marketplace update tempus-claude 2>/dev/null; then
-    die "Could not refresh the Tempus plugin marketplace."
-  fi
-  echo "✓ Tempus marketplace ready"
-
-  # Clean up any previous installation to prevent duplicate registrations
-  claude plugin uninstall tempus-marketing@tempus-claude 2>/dev/null || true
-
-  echo "Installing the Tempus Claude plugin..."
-
-  # ─── Collect pre-install diagnostic context ────────────────────────────────
-  DIAG_LOG="/tmp/tempus-plugin-install.log"
-  {
-    echo "=== Tempus Plugin Install Diagnostics ==="
-    echo "Date: $(date -u)"
-    echo "macOS: $(sw_vers -productVersion 2>/dev/null || echo unknown)"
-    echo "HOME=$HOME"
-    echo "USER=$USER"
-    echo "PATH=$PATH"
-    echo ""
-    echo "=== claude --version ==="
-    claude --version 2>&1 || echo "(claude --version failed)"
-    echo ""
-    echo "=== claude plugin list ==="
-    claude plugin list 2>&1 || echo "(claude plugin list failed)"
-    echo ""
-    echo "=== claude plugin marketplace list ==="
-    claude plugin marketplace list 2>&1 || echo "(claude plugin marketplace list failed)"
-    echo ""
-    echo "=== ~/.claude (top-level) ==="
-    ls -la "$HOME/.claude" 2>&1 || echo "(~/.claude not found)"
-    echo ""
-    echo "=== ~/.claude/plugins ==="
-    ls -la "$HOME/.claude/plugins" 2>&1 || echo "(~/.claude/plugins not found)"
-    echo ""
-    echo "=== ~/.claude/marketplaces ==="
-    ls -la "$HOME/.claude/marketplaces" 2>&1 || echo "(~/.claude/marketplaces not found)"
-    echo ""
-    echo "=== ~/.claude/settings.json ==="
-    cat "$HOME/.claude/settings.json" 2>&1 || echo "(settings.json not found)"
-    echo ""
-    echo "=== plugin install: claude plugin install tempus-marketing@tempus-claude ==="
-  } > "$DIAG_LOG" 2>&1
-
-  # ─── Run plugin install, capturing full stdout+stderr ──────────────────────
-  # Note: @tempus-claude is the marketplace name - this suffix is required and must not be removed
-  INSTALL_EXIT=0
-  INSTALL_OUT=$(claude plugin install tempus-marketing@tempus-claude 2>&1) || INSTALL_EXIT=$?
-  printf '%s\nExit code: %s\n' "$INSTALL_OUT" "$INSTALL_EXIT" >> "$DIAG_LOG"
-
-  if [ "$INSTALL_EXIT" -eq 0 ]; then
-    echo "✓ Tempus Claude plugin installed"
-
-    # Verify plugin is properly registered
-    if ! claude plugin list 2>/dev/null | grep -q "tempus-marketing.*enabled"; then
-      echo ""
-      echo "Warning: Plugin installed but may not be active."
-      echo "Try running: claude plugin install tempus-marketing@tempus-claude"
-      echo "If that doesn't work, email grover.richardson@tempus.com"
-    fi
-
-    return 0
-  fi
-
-  # ─── Install failed — upload diagnostics as a public GitHub Gist ───────────
-  echo ""
-  echo "Collecting diagnostics for remote review..."
-
-  GIST_URL=""
-  if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
-    GIST_URL=$(gh gist create --public \
-      --filename "tempus-install-diag.log" \
-      "$DIAG_LOG" 2>/dev/null | tail -1) || true
-  fi
-
-  if [ -n "$GIST_URL" ]; then
-    echo ""
-    echo "============================================="
-    echo "  Diagnostic log ready for Grover"
-    echo "============================================="
-    echo ""
-    echo "  $GIST_URL"
-    echo ""
-    echo "  Send this URL to: grover.richardson@tempus.com"
-    echo "  He can diagnose and fix the issue remotely."
-    echo "============================================="
-    echo ""
-    die "Could not install the Tempus Claude plugin. Send the URL above to Grover."
+install_vscode() {
+  if [[ -d "/Applications/Visual Studio Code.app" ]]; then
+    echo "✓ VS Code already installed"
   else
-    die "Could not install the Tempus Claude plugin."
+    echo "Downloading VS Code..."
+    curl -fsSL -o /tmp/VSCode-universal.zip \
+      "https://update.code.visualstudio.com/latest/darwin-universal/stable" \
+      || die "Could not download VS Code. Check your internet connection and try again."
+
+    echo "Installing VS Code..."
+    unzip -q /tmp/VSCode-universal.zip -d /tmp/ \
+      || die "Could not unzip VS Code. Try again."
+
+    mv "/tmp/Visual Studio Code.app" /Applications/ \
+      || die "Could not move VS Code to Applications. You may need to do this step manually."
+
+    rm -f /tmp/VSCode-universal.zip
+
+    echo "✓ VS Code installed"
+  fi
+
+  # Resolve the `code` CLI
+  if command -v code &>/dev/null; then
+    CODE_CLI="code"
+  elif [[ -x "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" ]]; then
+    CODE_CLI="/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+  else
+    die "Could not find the VS Code command-line tool. Try opening VS Code and running 'Shell Command: Install code command in PATH' from the command palette."
   fi
 }
 
-# ─── CLAUDE.md ───────────────────────────────────────────────────────────────
+# ─── Claude Code Extension ───────────────────────────────────────────────────
 
-setup_claude_md() {
-  PLUGIN_CLAUDE_MD="$HOME/.claude/plugins/tempus-claude/tempus-marketing/CLAUDE.md"
-  DEST_CLAUDE_MD="$HOME/.claude/CLAUDE.md"
-  START_MARKER="<!-- TEMPUS-PLUGIN-START -->"
-  END_MARKER="<!-- TEMPUS-PLUGIN-END -->"
-
-  if [[ ! -f "$PLUGIN_CLAUDE_MD" ]]; then
-    echo ""
-    echo "Note: Plugin instructions not found yet - skipping"
-    echo "that step. This is normal on a first install."
+install_claude_ext() {
+  if "$CODE_CLI" --list-extensions 2>/dev/null | grep -q "anthropic.claude-code"; then
+    echo "✓ Claude Code extension already installed"
     return 0
   fi
 
-  PLUGIN_CONTENT="$(cat "$PLUGIN_CLAUDE_MD")"
+  echo "Installing the Claude Code extension..."
+  "$CODE_CLI" --install-extension anthropic.claude-code --force \
+    || die "Could not install the Claude Code extension. Make sure VS Code is not open and try again."
 
-  # Case 1: No existing CLAUDE.md - create fresh with markers
-  if [[ ! -f "$DEST_CLAUDE_MD" ]]; then
-    {
-      echo "$START_MARKER"
-      printf '%s\n' "$PLUGIN_CONTENT"
-      echo "$END_MARKER"
-    } > "$DEST_CLAUDE_MD"
-    echo "✓ Instructions file created"
-    return 0
-  fi
-
-  # Case 2: Markers already exist - update only the plugin section (idempotent re-run)
-  if grep -q "$START_MARKER" "$DEST_CLAUDE_MD"; then
-    # Extract everything before the start marker and after the end marker
-    BEFORE_MARKER="$(awk "/$START_MARKER/{exit} {print}" "$DEST_CLAUDE_MD")"
-    AFTER_MARKER="$(awk "found && /$END_MARKER/{found=0} found{print} /$END_MARKER/{found=1}" "$DEST_CLAUDE_MD")"
-    {
-      [[ -n "$BEFORE_MARKER" ]] && printf '%s\n' "$BEFORE_MARKER"
-      echo "$START_MARKER"
-      printf '%s\n' "$PLUGIN_CONTENT"
-      echo "$END_MARKER"
-      if [[ -n "$AFTER_MARKER" ]]; then
-        printf '\n%s\n' "$AFTER_MARKER"
-      fi
-    } > "$DEST_CLAUDE_MD"
-    echo "✓ Instructions updated"
-    return 0
-  fi
-
-  # Case 3: Existing CLAUDE.md without markers - prepend plugin content (full backup already done)
-  echo ""
-  echo "Note: You already have a personal instructions file."
-  echo "It's been preserved in your backup from the start of this install."
-
-  EXISTING_CONTENT="$(cat "$DEST_CLAUDE_MD")"
-  {
-    echo "$START_MARKER"
-    printf '%s\n' "$PLUGIN_CONTENT"
-    echo "$END_MARKER"
-    if [[ -n "$EXISTING_CONTENT" ]]; then
-      echo ""
-      echo "# Your Custom Instructions"
-      echo "$EXISTING_CONTENT"
-    fi
-  } > "$DEST_CLAUDE_MD"
-  echo "✓ Instructions merged — your custom settings are preserved below"
+  echo "✓ Claude Code extension installed"
 }
 
-# ─── Auto-Update ─────────────────────────────────────────────────────────────
+# ─── Decks Folder ────────────────────────────────────────────────────────────
 
-setup_autoupdate() {
-  ZSHRC="$HOME/.zshrc"
+setup_decks_folder() {
+  if [[ ! -d "$HOME/Desktop/Tempus-Decks" ]]; then
+    mkdir -p "$HOME/Desktop/Tempus-Decks"
+  fi
+  echo "✓ Tempus-Decks folder ready on your Desktop"
+}
 
-  if grep -q "FORCE_AUTOUPDATE_PLUGINS" "$ZSHRC" 2>/dev/null; then
-    echo "✓ Auto-update already configured"
+# ─── Deck Designer Skill ─────────────────────────────────────────────────────
+
+download_skill() {
+  if [[ -f "$HOME/Desktop/Tempus-Decks/SKILL.md" ]]; then
+    echo "✓ Deck Designer skill file ready"
     return 0
   fi
 
-  {
-    echo ""
-    echo "# Tempus Claude Code - keep plugins auto-updated"
-    echo "export FORCE_AUTOUPDATE_PLUGINS=1"
-  } >> "$ZSHRC"
+  curl -fsSL \
+    -o "$HOME/Desktop/Tempus-Decks/SKILL.md" \
+    "https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/SKILL.md" \
+    || die "Could not download the Deck Designer skill file. Check your internet connection and try again."
 
-  echo "✓ Auto-update configured"
-  echo ""
-  echo "  Note: To activate this, open a new Terminal"
-  echo "  window before using Claude Code."
+  echo "✓ Deck Designer skill file ready"
 }
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 print_banner
 check_macos
-install_homebrew
-install_gh
-install_node
-install_claude
-setup_github_auth
-verify_repo_access
-backup_existing_setup
-install_plugin
-setup_claude_md
-setup_autoupdate
+install_vscode
+install_claude_ext
+setup_decks_folder
+download_skill
 print_success
