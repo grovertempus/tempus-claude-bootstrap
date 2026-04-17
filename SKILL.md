@@ -96,7 +96,7 @@ For each slide in the approved plan, produce:
 
 - **Action title:** Maximum 15 words. Active voice. States the conclusion, not the subject. Includes a quantitative indicator where possible. Must be a complete sentence with a verb. Never a topic title. (Minto Pyramid Principle; McKinsey/BCG standards via Slideworks)
 - **Body copy:** Match the slide's layout and the deck genre.
-  - Live deck: maximum 30 words total body text per slide. Prefer a single declarative sentence or a call-out number over a bullet list. Use bullets only when all three conditions hold: items are parallel in structure, items are context-independent (no bullet requires reading another), and there are 5 or fewer items. (Duarte, slide:ology; Reynolds, Presentation Zen; Tufte, Cognitive Style of PowerPoint)
+  - Live deck: maximum 30 words total body text per slide. Prefer a single declarative sentence or a call-out number over a bullet list. Use bullets only per the discipline rules in Phase 2 section (b) — parallel + context-independent + ≤ 5 items.
   - Reader deck: full sentences are acceptable. Action-title rule still mandatory. Bullets still require the same three conditions; 5-bullet ceiling applies.
 - **Data callouts and captions** verbatim where the plan specifies data points.
 
@@ -186,6 +186,8 @@ def audit_clone_fidelity(src_slide, dest_slide, slide_idx):
         for attr in ("left", "top", "width", "height"):
             if getattr(s, attr, None) != getattr(d, attr, None):
                 failures.append(f"shape {i} {attr} drift")
+        if getattr(s, "rotation", None) != getattr(d, "rotation", None):
+            failures.append(f"shape {i} rotation drift")
 
         # Text formatting (if both have text frames)
         if not (s.has_text_frame and d.has_text_frame):
@@ -195,6 +197,10 @@ def audit_clone_fidelity(src_slide, dest_slide, slide_idx):
         ):
             if sp.alignment != dp.alignment:
                 failures.append(f"shape {i} para {pi} alignment drift")
+            if sp.level != dp.level:
+                failures.append(f"shape {i} para {pi} level drift")
+            if sp.line_spacing != dp.line_spacing:
+                failures.append(f"shape {i} para {pi} line_spacing drift")
             for ri, (sr, dr) in enumerate(zip(sp.runs, dp.runs)):
                 for attr in ("name", "size", "bold", "italic", "underline"):
                     if getattr(sr.font, attr) != getattr(dr.font, attr):
@@ -388,7 +394,7 @@ Additional constraints:
 
 #### (c) Genre-aware density
 
-- **Live (delivered) deck:** Maximum 30 words of body text per slide. Maximum 4 bullets per slide. Prefer single-idea slides with a visual. Body text is a support element, not the message. (Duarte, slide:ology; Reynolds, Presentation Zen)
+- **Live (delivered) deck:** Maximum 30 words of body text per slide. Prefer 3 or fewer bullets; never exceed 5. Prefer single-idea slides with a visual. Body text is a support element, not the message. (Duarte, slide:ology; Reynolds, Presentation Zen)
 - **Reader deck (slidedoc):** Full sentences and short paragraphs are acceptable. No hard word ceiling per slide, but each unit of text must carry exactly one distinct idea. Action-title rule is still mandatory — mode-independent. (Duarte, Slidedocs)
 
 ### Important rules for Phase 2
@@ -421,7 +427,7 @@ Additional constraints:
 - Do not write documentation or comments in the output files.
 - Do not use the same layout for every slide. Mix it up for visual variety.
 - Do not use topic titles. "Revenue Analysis" is not a title. "Revenue grew 28% in Q3, driven by SMB expansion" is a title. Every title must state a conclusion with a verb.
-- Do not write bullets when a sentence will do. Bullets are structural noise unless items are genuinely parallel, context-independent, and 5 or fewer. (Tufte, Reynolds)
+- Do not write bullets when a sentence will do. Bullets are structural noise unless items meet the discipline rules in Phase 2 section (b). (Tufte, Reynolds)
 - Do not exceed 5 bullets on any slide. If the outline needs more, split the slide or convert to a diagram.
 - Do not write bullets longer than 12 words. If a bullet exceeds 12 words, it is a sentence — format it as one.
 - Do not skip the skimmability audit. Print the action-title-only summary and confirm the argument holds before building.
