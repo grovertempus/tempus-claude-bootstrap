@@ -516,6 +516,76 @@ for shape in slide.shapes:
             para.runs[0].text = new_text
 ```
 
+### Reminder shapes: preserve, do not clear
+
+The Tempus Light template has intentional pink-filled shapes (`RGB(FF00FF)` / magenta) that carry designer instructions to whoever is using the deck — e.g., "Right click above and select 'Replace image' to update for your tech", or "Copy additional image files from the end of this template to swap brand imagery". These are NOT content slots. They are user reminders and must remain visible in the finished deck with their default text intact.
+
+Before writing, clearing, or deleting any shape during Phase 2, check its fill:
+
+```python
+from pptx.dml.color import RGBColor
+
+REMINDER_FILL = RGBColor(0xFF, 0x00, 0xFF)  # solid magenta
+
+def is_reminder_shape(shape):
+    try:
+        if shape.fill.type is None:
+            return False
+        return shape.fill.fore_color.rgb == REMINDER_FILL
+    except (AttributeError, TypeError):
+        return False
+```
+
+Rules for reminder shapes:
+
+1. **Do not clear their text.** The default instruction IS the content — leave it verbatim.
+2. **Do not delete them** even if they look empty. The "Unused placeholders: delete, do not blank" rule below does NOT apply to reminder shapes.
+3. **Do not pass them to the copy-writing loop.** They already have their final copy baked in.
+4. **Applies to Make-Pretty Mode too.** When transplanting content into a Tempus layout or doing copy-only revisions, skip reminder shapes entirely.
+
+### Image placeholders: preserve empty, do not replace
+
+When a slide has an empty image placeholder (a PICTURE-type placeholder with no inserted picture), leave it exactly as the template provides it. PowerPoint renders these as a frame with a small prompt icon — that icon IS the click-to-add-image affordance. The deck user needs it visible so they can click and drop in an image after you hand off the deck.
+
+Do NOT:
+- Clear or modify any text on the placeholder
+- Delete the placeholder even if it looks empty (the "Unused placeholders: delete, do not blank" rule below does NOT apply to PICTURE placeholders)
+- Replace it with a substitute shape, box, or caution icon
+- Reformat, resize, or restyle it
+
+DO:
+- Skip it in the copy-writing loop
+- Insert a picture into it ONLY when you have an actual image to place (via Pattern B: `target_ph.insert_picture(io.BytesIO(blob))` — see Make-Pretty Mode)
+- Otherwise leave the shape as the template cloned it
+
+```python
+from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+def is_empty_image_placeholder(shape):
+    try:
+        if not shape.is_placeholder:
+            return False
+        if shape.placeholder_format.type.name != 'PICTURE':
+            return False
+        # A PICTURE placeholder becomes MSO_SHAPE_TYPE.PICTURE once an image is inserted
+        return shape.shape_type != MSO_SHAPE_TYPE.PICTURE
+    except (AttributeError, ValueError):
+        return False
+```
+
+Quick skip at the top of the write-copy loop:
+
+```python
+for shape in slide.shapes:
+    if is_reminder_shape(shape):
+        continue  # pink reminder — leave alone
+    if is_empty_image_placeholder(shape):
+        continue  # empty image placeholder — user will add the image manually
+    # ... rest of the placeholder-handling logic
+```
+
+> NOTE: Before applying this rule, run the preservation checks above. (1) Pink-filled (RGB FF00FF) reminder shapes must be preserved. (2) Empty PICTURE-type placeholders must be preserved. The delete-empty rule applies ONLY to unused title/body/subtitle TEXT placeholders.
+
 **Unused placeholders: delete, do not blank.** If the approved copy has no content for a placeholder (e.g., the layout has a subtitle but this slide needs none, or a bullet body that receives zero rows), **delete the shape entirely** rather than setting its text to an empty string. Leaving an empty placeholder alive causes PowerPoint to render the layout's default prompt text ("Click to add subtitle") and leaves visible blank rows in bullet frames.
 
 ```python
@@ -664,3 +734,5 @@ If a build run produces a slide where text looks visibly different from the surr
 - Do not overwrite template formatting when writing copy. Use `run.text = '...'` to replace text while leaving `run.font.*` intact. Avoid replacing entire runs or paragraphs unless re-applying all formatting.
 - Do not leave unused placeholder shapes blank. Delete them via `shape._element.getparent().remove(shape._element)` so PowerPoint does not render default prompt text.
 - Do not leave unused bullet paragraphs with empty text. Remove them via `p = para._p; p.getparent().remove(p)` so they do not render as blank visible lines.
+- Do not clear or delete pink reminder shapes (magenta fill `RGB(FF00FF)`). Their default text is the content — it must remain visible in the finished deck so the deck user knows to swap in their own image or adjust the label. See the "Reminder shapes: preserve, do not clear" rule in Phase 2.
+- Do not delete, clear, reformat, or replace empty PICTURE-type placeholders. Leave them exactly as the template provides them so the deck user can click the native prompt icon and drop in an image. See the "Image placeholders: preserve empty, do not replace" rule in Phase 2.
