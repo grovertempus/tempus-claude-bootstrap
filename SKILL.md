@@ -86,6 +86,19 @@ Note: Always include the 0-based template slide index in the plan. This is criti
 - If the user mentions supporting documents, ask for the filename and look in their Tempus-Decks folder. Read them and pull relevant information into the plan.
 - Keep the conversation natural. You are a creative partner, not a form to fill out.
 
+### Match copy density to layout
+
+Short copy is fine — but pick a slide that is designed for it. Do NOT drop a single sentence onto a layout built for a dense paragraph or a bulleted list: the result is a lonely line of text floating in white space.
+
+When the approved copy for a slide is light (one sentence, a short phrase, or a single headline with no body), prefer layouts that either:
+
+1. Fill the remaining space with design elements — image placeholders, colored blocks, large graphics, device frames, or accent shapes. In the Tempus Light template these are typically the TITLE, TITLE_1_1, and image-forward layouts.
+2. Use a large-format title/headline treatment where the headline itself carries the slide (big type, tight leading). These are fine for a single statement or quote.
+
+When the copy is dense (multiple bullets, a paragraph, a table), pick layouts with real body capacity — TITLE_AND_BODY or table-oriented layouts.
+
+Rule of thumb: the copy should occupy 60–90% of the layout's intended content area. If your chosen layout leaves the slide feeling hollow, swap to a different layout before building. This decision belongs in Phase 1 (planning), not Phase 2 (build) — fix it in the plan before writing code.
+
 ## Phase 1.5: Copy Alignment
 
 After the user approves the slide plan structure, write full copy for every slide before any build step begins. Do not skip this phase. Do not start Phase 2 until the user explicitly approves the copy.
@@ -320,6 +333,26 @@ for shape in slide.shapes:
             para.runs[0].text = new_text
 ```
 
+**Unused placeholders: delete, do not blank.** If the approved copy has no content for a placeholder (e.g., the layout has a subtitle but this slide needs none, or a bullet body that receives zero rows), **delete the shape entirely** rather than setting its text to an empty string. Leaving an empty placeholder alive causes PowerPoint to render the layout's default prompt text ("Click to add subtitle") and leaves visible blank rows in bullet frames.
+
+```python
+# Delete a placeholder shape that has no copy
+sp = shape._element
+sp.getparent().remove(sp)
+```
+
+CRITICAL: Apply this BEFORE iterating runs. Check whether the slide's copy dict contains a value for each placeholder's `ph.idx`. If the key is absent or the value is `None` / empty string, remove the shape and `continue` — do not enter the run-editing loop for it.
+
+**Unused bullet paragraphs: remove, do not empty.** When a body placeholder receives fewer bullet rows than the template has paragraph elements, remove the trailing empty paragraphs rather than leaving them with blank run text. An empty `<a:p>` renders as a visible blank line.
+
+```python
+# After writing copy rows into leading paragraphs, prune any trailing empty ones
+paras = shape.text_frame.paragraphs
+for para in reversed(paras[len(copy_rows):]):
+    p = para._p
+    p.getparent().remove(p)
+```
+
 For tables:
 ```python
 if shape.has_table:
@@ -406,6 +439,17 @@ Additional constraints:
 - If you encounter table cells that are too small for the content, truncate the content to fit and flag it for the user to review.
 - After building, tell the user the deck is ready and remind them to upload it to Google Drive and open with Google Slides for final review.
 - Always verify the output by reopening with python-pptx and printing the slide order and text content before delivering.
+- **Google Slides blank-slide quirk:** When the finished .pptx is uploaded to Google Slides, Slides sometimes auto-prepends a blank slide at position 1. This is an undocumented Google Slides converter behavior and cannot be prevented on the .pptx authoring side. Tell the user to delete that first blank slide manually after uploading.
+
+## Template Conventions (as of v0.6.3)
+
+The bundled template has baked-in explicit formatting on every layout placeholder — nothing is left to inheritance. You do **not** need to force font/size/color/weight at build time; cloning the shape XML and editing only text content preserves the design.
+
+- **Font:** IBM Plex Sans for body, IBM Plex Sans SemiBold for headers/labels where the layout already specifies it.
+- **Default body size:** 12pt. Explicit per-layout overrides (e.g., 11pt callouts, larger title sizes) remain intact.
+- **Color:** Black (`#000000`) as the default body color, set explicitly on every placeholder.
+
+If a build run produces a slide where text looks visibly different from the surrounding design (smaller, lighter, wrong font), do not patch the slide — instead report which placeholder drifted so the template itself can be fixed.
 
 ## Character Count Guidelines
 
@@ -435,3 +479,5 @@ Additional constraints:
 - Do not `deepcopy` slide shape XML without also replaying relationships. Picture shapes will render broken.
 - Do not skip the final fidelity audit. The build is not done until the audit passes. Every font, size, color, and position from the template must be preserved; only copy content may differ.
 - Do not overwrite template formatting when writing copy. Use `run.text = '...'` to replace text while leaving `run.font.*` intact. Avoid replacing entire runs or paragraphs unless re-applying all formatting.
+- Do not leave unused placeholder shapes blank. Delete them via `shape._element.getparent().remove(shape._element)` so PowerPoint does not render default prompt text.
+- Do not leave unused bullet paragraphs with empty text. Remove them via `p = para._p; p.getparent().remove(p)` so they do not render as blank visible lines.
