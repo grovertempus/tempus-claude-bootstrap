@@ -106,7 +106,8 @@ install_vscode() {
       || die "Could not download VS Code. Check your internet connection and try again."
 
     echo "Installing VS Code..."
-    unzip -q /tmp/VSCode-universal.zip -d /tmp/ \
+    rm -rf "/tmp/Visual Studio Code.app"
+    unzip -oq /tmp/VSCode-universal.zip -d /tmp/ \
       || die "Could not unzip VS Code. Try again."
 
     # Remove macOS quarantine flag so Gatekeeper doesn't block it
