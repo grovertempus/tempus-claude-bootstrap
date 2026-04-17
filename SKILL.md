@@ -458,46 +458,77 @@ Naive `deepcopy` of shape XML copies `r:embed="rId…"` attributes verbatim — 
 
 **Pattern A — deepcopy + relationship replay (required for same-presentation clones):**
 
+#### Relationship replay: preserve original rIds, do not use add_relationship
+
+When cloning a slide's shape XML across to a new slide, every `r:embed="rIdN"` attribute in the cloned XML still references an `rId` that only exists in the SOURCE slide's rels file. You must replay those relationships into the DESTINATION part so the cloned XML resolves.
+
+DO NOT use `dest_part.add_relationship(...)` or `dest_part._add_relationship(...)`:
+- In python-pptx 1.0.2+, `add_relationship` has been made private (`_add_relationship`).
+- Both auto-generate a NEW `rId` rather than preserving the one you pass in.
+- Result: the cloned shape XML still says `rId3`, but the dest part now has a DIFFERENT `rId` for the same target. The XML reference is dangling.
+- Google Slides renders dangling references as caution-triangle icons on upload.
+
+Instead, force-write directly into the destination part's rels dict with the ORIGINAL `rId` preserved:
+
 ```python
 from copy import deepcopy
+from pptx.oxml.ns import qn
 
-def clone_slide_safe(src_slide, dest_slide):
-    for shape in src_slide.shapes:
-        new_el = deepcopy(shape.element)
-        dest_slide.shapes._spTree.insert_element_before(new_el, 'p:extLst')
-
-    for rel in src_slide.part.rels.values():
-        # Skip external and notesSlide rels
-        if rel.is_external or rel.reltype.endswith('/notesSlide'):
-            continue
-        dest_slide.part.rels.add_relationship(
-            rel.reltype, rel.target_part, rel.rId
-        )
+def replay_relationships(source_slide, dest_slide):
+    """Copy every image/media relationship from source into dest with ORIGINAL rIds."""
+    src_part = source_slide.part
+    dest_part = dest_slide.part
+    for rel_id, rel in src_part.rels.items():
+        if rel.reltype.endswith('/image') or rel.reltype.endswith('/media'):
+            dest_part.rels[rel_id] = rel
 ```
 
-The key is `rel.target_part` — passing the `ImagePart` object (not a new copy) re-registers the existing image under the same `rId` the copied XML expects. This works within a single presentation because `ImagePart` objects are deduplicated by SHA1 hash across the package.
+Call `replay_relationships` BEFORE `deepcopy`-ing shape XML, so the dest part's rels dict has the image references by the time the copied shapes land on the dest slide.
+
+CRITICAL: this is a deliberate bypass of the public API. It's the only reliable way to keep the original `rId`. If python-pptx adds a public `preserve_rid` option in a future version, prefer that. For now, direct `rels` dict assignment is the documented community workaround.
 
 **Pattern B fallback — when rel copy is impractical (cross-presentation moves):** Rebuild picture shapes via `dest.shapes.add_picture(io.BytesIO(shape.image.blob), left, top, width, height)`. This guarantees valid references but loses crop, shadow, and alt-text. Use only when Pattern A is unavailable.
 
 **Post-build picture-ref validation probe (run after each clone):**
 
+#### Picture-reference audit: recurse into GROUP shapes
+
+A plain `for shape in slide.shapes` loop does NOT walk into group shapes. But the Tempus template's section-header slides (2, 6, 8) contain their images INSIDE a GROUP. A non-recursive audit will report "all pictures valid" while missing broken references inside groups — exactly the silent failure mode that shipped the caution-triangle bug.
+
+Always recurse:
+
 ```python
 from pptx.enum.shapes import MSO_SHAPE_TYPE
-for slide_idx, slide in enumerate(prs.slides):
-    for shape in slide.shapes:
-        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-            try:
-                _ = shape.image.blob
-                _ = shape.image.content_type
-            except KeyError:
-                raise RuntimeError(
-                    f"Slide {slide_idx+1}: broken picture ref for "
-                    f"shape id={shape.shape_id}. Clone did not copy "
-                    f"image relationship. Fix clone_slide_safe()."
-                )
+from pptx.oxml.ns import qn
+
+def iter_all_shapes(container):
+    """Yield every shape, recursing into groups."""
+    for shape in container.shapes:
+        if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+            yield from iter_all_shapes(shape)
+        else:
+            yield shape
+
+def audit_pictures(slide):
+    """Confirm every PICTURE references a blob that exists in the slide's part."""
+    dest_part = slide.part
+    for shape in iter_all_shapes(slide):
+        if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
+            continue
+        blip = shape._element.find('.//' + qn('a:blip'))
+        if blip is None:
+            continue
+        rid = blip.get(qn('r:embed'))
+        if rid not in dest_part.rels:
+            raise AssertionError(
+                f"Slide {slide.slide_id} picture references {rid} "
+                f"which does not exist in the destination part's rels. "
+                f"Relationship replay failed — Google Slides will render "
+                f"this as a caution triangle."
+            )
 ```
 
-Run this probe before saving. If it raises, the build fails loudly instead of producing a silently broken .pptx.
+Call `audit_pictures` after every slide is built AND again after `prs.save` + reopen (the two-probe pattern from the existing fidelity audit). A dangling rId inside a group that escapes the audit WILL render as a caution triangle when the user uploads to Google Slides.
 
 **Step 3: Edit text content.** For each cloned slide, replace placeholder text:
 
@@ -736,3 +767,5 @@ If a build run produces a slide where text looks visibly different from the surr
 - Do not leave unused bullet paragraphs with empty text. Remove them via `p = para._p; p.getparent().remove(p)` so they do not render as blank visible lines.
 - Do not clear or delete pink reminder shapes (magenta fill `RGB(FF00FF)`). Their default text is the content — it must remain visible in the finished deck so the deck user knows to swap in their own image or adjust the label. See the "Reminder shapes: preserve, do not clear" rule in Phase 2.
 - Do not delete, clear, reformat, or replace empty PICTURE-type placeholders. Leave them exactly as the template provides them so the deck user can click the native prompt icon and drop in an image. See the "Image placeholders: preserve empty, do not replace" rule in Phase 2.
+- Do not use `add_relationship` or `_add_relationship` to replay image relationships onto cloned slides. Both auto-generate new rIds, breaking cloned XML references. Write directly into `dest_part.rels[rel_id] = rel` with the ORIGINAL rId preserved. See "Relationship replay: preserve original rIds" in Phase 2.
+- Do not iterate `slide.shapes` alone when auditing pictures. Recurse into GROUP shapes — section-header images live inside groups and a non-recursive audit silently passes broken references. See "Picture-reference audit: recurse into GROUP shapes" in Phase 2.
