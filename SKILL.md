@@ -30,6 +30,192 @@ This skill has three phases:
 2. **Copy Alignment:** Write full copy for every slide (action title, body, callouts). Run a self-check pass against antipatterns. Present to user for review. Do not proceed until the user explicitly approves.
 3. **Execution:** Build the deck using `python-pptx` with the approved copy, verbatim. The build step is a renderer, not a writer.
 
+## Make-Pretty Mode
+
+Make-Pretty Mode is for users who already have a .pptx and need it polished. When this mode is triggered, skip Phase 1 brainstorming entirely and go straight to the template-lineage question below. The outcome is one of two things: a full template transplant (Branch A), where the existing content is migrated into the Tempus template with images preserved; or a copy-only pass (Branch B), where the text is revised in place without touching any visual structure.
+
+### Trigger
+
+Route into Make-Pretty Mode when the user says any of the following: "make this deck pretty", "clean up this deck", "polish this deck", "I have a deck I want to fix", or any message that includes a file path ending in `.pptx`. When you see these triggers, do NOT ask the Phase 1 genre and takeaway questions. Do NOT produce a brainstorming plan. Go directly to Step 1 below.
+
+### Step 1: Ask about template lineage
+
+Always ask the user this exact question before doing anything else:
+
+**"Was this deck originally built using the Tempus template?"**
+
+Do not try to auto-detect the answer. Even if the slide layouts look familiar, ask. The user's answer determines how aggressive the transformation will be, and getting it wrong means rebuilding the wrong structure.
+
+You can use the following snippet as internal context to inform how you phrase the question — if the layout names match the canonical set, you can say "it looks like it may have been built on the Tempus template, but I want to confirm" — but the user still decides, not this check:
+
+```python
+TEMPUS_LAYOUTS = {
+    'TITLE', 'TITLE_1_1', 'TITLE_1_1_1', 'TITLE_AND_BODY',
+    'BLANK', 'BLANK_1',
+    'CUSTOM_1_1', 'CUSTOM_1_1_1', 'CUSTOM_2', 'CUSTOM_2_1',
+    'CUSTOM_3', 'CUSTOM_1_2',
+}
+from pptx import Presentation
+prs = Presentation(source_path)
+source_layouts = {layout.name for layout in prs.slide_layouts}
+probably_tempus = source_layouts == TEMPUS_LAYOUTS
+```
+
+Use `probably_tempus` only as internal context for how to frame the question — never as a decision. Always ask the user.
+
+### Step 2: Branch
+
+If the user answers **yes** to the template question, go to Branch A (Template Transplant).
+
+If the user answers **no**, ask one follow-up question: "Do you want me to convert it into the Tempus template, or just clean up the copy where it is?" If the user says convert (or template), go to Branch A. If the user says copy-only (or just fix the text, or leave the design alone), go to Branch B.
+
+### Branch A: Template Transplant
+
+Open both the source .pptx the user provided and the Tempus template from the user's Tempus-Decks folder. For each source slide, you will classify its content, pick the best matching Tempus layout, build a new slide in the output deck based on that layout, migrate all content from the source into the new slide's placeholders, and then apply the v0.6.5 cleanup rules.
+
+**Classifying source slide content.**
+
+Before you can pick a layout, you need to know what is on each source slide. Use this function:
+
+```python
+from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+def classify_slide(slide):
+    """Return a dict describing what's on the slide."""
+    info = {'title_text': None, 'body_texts': [], 'tables': [],
+            'placeholder_images': [], 'free_images': []}
+    for shape in slide.shapes:
+        try:
+            ph_type = shape.placeholder_format.type.name
+        except (ValueError, AttributeError):
+            ph_type = None
+        if shape.shape_type == MSO_SHAPE_TYPE.TABLE or getattr(shape, 'has_table', False):
+            info['tables'].append(shape)
+        elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            if ph_type == 'PICTURE':
+                info['placeholder_images'].append(shape)
+            else:
+                info['free_images'].append(shape)
+        elif getattr(shape, 'has_text_frame', False) and shape.text_frame.text.strip():
+            if ph_type == 'TITLE':
+                info['title_text'] = shape.text_frame.text
+            else:
+                info['body_texts'].append(shape.text_frame.text)
+    return info
+```
+
+**Picking the best Tempus layout.**
+
+Once you have the classification, use this decision tree to choose the layout name:
+
+```python
+def choose_layout(info):
+    img_count = len(info['placeholder_images']) + len(info['free_images'])
+    body_chars = sum(len(t) for t in info['body_texts'])
+
+    if info['tables']:
+        return 'CUSTOM_2_1'
+    if img_count == 1:
+        return 'CUSTOM_2'
+    if img_count == 2:
+        return 'CUSTOM_1_1'
+    if img_count == 3:
+        return 'CUSTOM_1_1_1'
+    if img_count >= 4:
+        return None  # Flag to user — no 4-image layout exists
+    # Text-only:
+    if body_chars < 100 and len(info['body_texts']) <= 1:
+        return 'TITLE_1_1' if info['body_texts'] else 'TITLE'
+    return 'TITLE_AND_BODY'
+```
+
+When `choose_layout` returns `None`, tell the user: "Slide N has 4 or more images — the Tempus template has no layout for that many images. I'll use CUSTOM_1_1_1 and include the first three images; images 4+ will be listed but not placed." Do not silently drop images.
+
+After picking a layout, run the copy-density sanity check from the "Match copy density to layout" rule in Phase 1. If the chosen layout would leave the slide hollow given the source content, swap to a denser layout before building.
+
+**Migrating images: Pattern B (required for cross-presentation moves).**
+
+CRITICAL: The Pattern A relationship-replay idiom described in the "Cloning slides safely" section of Phase 2 does NOT work when moving images between two different .pptx files. Image blobs live in different zip packages, and replaying relationship IDs across packages produces broken references. For all image migration in Branch A, use Pattern B: extract the binary blob from the source shape and reinsert it into the target.
+
+For a PICTURE placeholder on the target slide:
+
+```python
+import io
+
+# For a PICTURE placeholder on the target slide:
+target_ph.insert_picture(io.BytesIO(source_image_shape.image.blob))
+
+# For a free-floating image (no placeholder slot available):
+target_slide.shapes.add_picture(
+    io.BytesIO(source_image_shape.image.blob),
+    source_image_shape.left,
+    source_image_shape.top,
+    source_image_shape.width,
+    source_image_shape.height,
+)
+```
+
+Note that Pattern B does not preserve crop, shadow, or alt-text from the original image shape. This is acceptable for a template transplant — the image content lands correctly even if decorative treatments are lost.
+
+**Migrating text and tables.**
+
+Match source placeholders to target placeholders by `placeholder_format.type.name`. A source placeholder with type `TITLE` maps to the target's `TITLE` placeholder; a source `BODY` maps to the target's `BODY`. Use `run.text = '...'` to write text content into each run, which preserves the target layout's font, size, color, and weight.
+
+For tables: copy each cell's text into the corresponding target table cell. If the target layout has no table placeholder (which is the case for most Tempus layouts other than CUSTOM_2_1), flag the slide to the user: "Slide N contains a table but the chosen layout has no table placeholder. The table was not migrated. You will need to place it manually."
+
+**Apply existing v0.6.5 rules.**
+
+After migrating content into each target slide, apply the same cleanup rules from Phase 2:
+
+- Delete empty placeholders (see the "Unused placeholders: delete, do not blank" rule in Phase 2) — any placeholder that received no content from the source should be removed, not left as a blank prompt.
+- Prune empty paragraphs (see the "Unused bullet paragraphs: remove, do not empty" rule in Phase 2) — trailing empty `<a:p>` elements left after migration must be removed.
+
+**Overflow handling.**
+
+If the source slide has more images than the target layout has PICTURE placeholder slots, take images in slot order (first image into first slot, second into second, and so on). Report the skipped count to the user with the slide number: "Slide N: placed 2 of 4 images — 2 images had no target slot and were skipped." Do not auto-switch to a different layout to accommodate more images. The layout decision is made once by `choose_layout` and stays fixed. Predictability matters more than cleverness here.
+
+### Branch B: Copy-Only
+
+Do NOT rebuild the deck. Do NOT change any slide layouts, colors, fonts, sizes, or shape positions. Open the existing .pptx in place and extract every text frame for review.
+
+Run the extracted text through the Phase 1.5 copy discipline: action titles (active voice, states a conclusion, maximum 15 words, includes a verb), bullet parallelism, tight phrasing, and the self-check antipattern table. Present the proposed revisions to the user slide by slide before writing anything back.
+
+```python
+# Extract text from every slide for review
+for idx, slide in enumerate(prs.slides):
+    for shape in slide.shapes:
+        if getattr(shape, 'has_text_frame', False):
+            for para in shape.text_frame.paragraphs:
+                text = ''.join(run.text for run in para.runs)
+                if text.strip():
+                    # Present to user for revision
+                    ...
+```
+
+Once the user approves the revised copy, write it back using `run.text = '...'` to preserve the existing formatting on every run. Do not replace entire paragraphs or text frames. Do not touch anything except the text string content.
+
+After writing approved revisions back, apply the delete-empty-placeholder and prune-empty-paragraph rules from Phase 2 if any revisions result in a placeholder that is now empty.
+
+Save the result to a NEW filename — do not overwrite the user's original. Use the pattern `[original-name]-revised.pptx`.
+
+### Out of scope: what Make-Pretty Mode will NOT attempt
+
+Make-Pretty Mode handles layout transplant and copy revision. It does not attempt to fix the following:
+
+- Non-standard fonts embedded in the source deck
+- Off-brand colors applied directly to custom shapes or text runs
+- Misaligned or overlapping free-form shapes
+- Non-16:9 slide dimensions
+- Low-resolution or corrupted images
+- Animations or slide transitions
+- Embedded charts or SmartArt objects
+- Multi-master decks (decks with more than one slide master)
+- Slides with no placeholder structure at all (pure free-form canvas layouts where all content is in manually-positioned text boxes)
+- Placeholder `idx=4294967295` artifacts that sometimes appear in decks exported from Google Slides
+
+**Degradation policy.** When a source slide cannot be processed — either because it has no recognizable placeholder structure or because it falls into one of the out-of-scope categories above — flag it to the user and preserve the original slide unchanged: "Slide N has a manual layout — skipping auto-transplant, preserving original." Never silently produce a broken or partially migrated slide. The user should be able to trust that what you deliver is either correctly migrated or explicitly marked as skipped.
+
 ## Phase 1: Brainstorming
 
 When the user activates this skill, start with the genre and takeaway questions above. Then ask further questions one at a time.
