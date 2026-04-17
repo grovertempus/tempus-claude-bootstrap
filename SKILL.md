@@ -259,10 +259,8 @@ def clone_slide(prs, source_index):
     source = prs.slides[source_index]
     layout = source.slide_layout
     new_slide = prs.slides.add_slide(layout)
-    # Remove default shapes from new slide
     for sp in list(new_slide.shapes):
         new_slide.shapes._spTree.remove(sp._element)
-    # Deep copy all shapes from source
     for sp in source.shapes:
         new_slide.shapes._spTree.append(deepcopy(sp._element))
     return new_slide
@@ -325,7 +323,6 @@ for shape in slide.shapes:
     if ph is None:
         continue
     # Use ph.idx to identify which placeholder this is (0=title, 1=subtitle, 2+=body)
-    # Replace text in existing runs to preserve formatting:
     for para in shape.text_frame.paragraphs:
         for run in para.runs:
             run.text = ''

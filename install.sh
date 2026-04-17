@@ -467,11 +467,6 @@ setup_decks_folder() {
 install_skill() {
   SKILL_DIR="$HOME/.claude/skills/deck-designer"
 
-  if [[ -f "$SKILL_DIR/SKILL.md" ]]; then
-    echo "✓ Deck Designer skill already installed"
-    return 0
-  fi
-
   mkdir -p "$SKILL_DIR"
 
   curl -fsSL \
@@ -479,7 +474,7 @@ install_skill() {
     "https://raw.githubusercontent.com/grovertempus/tempus-claude-bootstrap/main/SKILL.md" \
     || die "Could not download the Deck Designer skill file. Check your internet connection and try again."
 
-  echo "✓ Deck Designer skill installed (/deck-designer)"
+  echo "✓ Deck Designer skill installed/updated (/deck-designer)"
 }
 
 # ─── Auto-Update ─────────────────────────────────────────────────────────────
