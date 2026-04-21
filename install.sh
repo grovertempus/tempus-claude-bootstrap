@@ -456,10 +456,33 @@ setup_claude_md() {
 # ─── Decks Folder ────────────────────────────────────────────────────────────
 
 setup_decks_folder() {
-  if [[ ! -d "$HOME/Desktop/Tempus-Decks" ]]; then
-    mkdir -p "$HOME/Desktop/Tempus-Decks"
+  local dest="$HOME/Desktop/Tempus-Decks"
+  mkdir -p "$dest"
+
+  # Find the most-recently-modified tempus-assets dir in the plugin cache
+  local assets_src
+  assets_src="$(ls -td "$HOME/.claude/plugins/cache/tempus-claude/tempus-marketing/"*/tempus-assets 2>/dev/null | head -1 || true)"
+
+  if [[ -z "$assets_src" ]] || [[ ! -d "$assets_src" ]]; then
+    echo "ℹ Tempus-Decks folder ready on your Desktop (templates will appear after first Claude launch)"
+    return 0
   fi
-  echo "✓ Tempus-Decks folder ready on your Desktop"
+
+  for src_file in "$assets_src"/*.pptx; do
+    [[ -f "$src_file" ]] || continue
+    local base="${src_file##*/}"
+    local dst_file="$dest/$base"
+    [[ -e "$dst_file" ]] && continue
+    # LFS pointer stubs are ~130-byte text files; don't copy one in place of the real .pptx
+    if head -c 100 "$src_file" 2>/dev/null | grep -q "git-lfs.github.com/spec/v1"; then
+      echo "⚠ Template file is a Git LFS stub, skipping: $base"
+      continue
+    fi
+    cp "$src_file" "$dst_file"
+    echo "✓ Copied $base"
+  done
+
+  echo "✓ Tempus-Decks folder ready on your Desktop with templates"
 }
 
 # ─── Deck Designer Skill ─────────────────────────────────────────────────────
