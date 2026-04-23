@@ -78,6 +78,27 @@ die() {
   exit 1
 }
 
+ensure_git_lfs() {
+  if command -v git-lfs >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "Installing Git LFS (needed for Tempus plugin templates)..."
+  if command -v brew >/dev/null 2>&1; then
+    brew install git-lfs >/dev/null 2>&1 || die "Homebrew failed to install git-lfs."
+  else
+    die "Homebrew not found. Cannot install git-lfs automatically. Install Homebrew first: https://brew.sh"
+  fi
+  git lfs install >/dev/null 2>&1 || die "git lfs install failed."
+  echo "✓ Git LFS installed"
+}
+
+reset_marketplace_clone() {
+  local clone_dir="$HOME/.claude/plugins/marketplaces/tempus-claude"
+  if [ -d "$clone_dir/.git" ]; then
+    (cd "$clone_dir" && git checkout -- . >/dev/null 2>&1 && git clean -fd >/dev/null 2>&1) || true
+  fi
+}
+
 # ─── Checks ──────────────────────────────────────────────────────────────────
 
 check_macos() {
@@ -301,6 +322,8 @@ install_plugin() {
   fi
 
   # Use explicit HTTPS URL so users without GitHub SSH keys can still clone the private marketplace
+  ensure_git_lfs
+  reset_marketplace_clone
   claude plugin marketplace add https://github.com/grovertempus/tempus-claude.git 2>/dev/null || true
   if ! claude plugin marketplace update tempus-claude 2>/dev/null; then
     die "Could not refresh the Tempus plugin marketplace."
