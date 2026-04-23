@@ -41,7 +41,8 @@ print_banner() {
   echo "  5. Install GitHub CLI"
   echo "  6. Connect your GitHub account"
   echo "  7. Install the Tempus plugin"
-  echo "  8. Set up Deck Designer"
+  echo "  8. Sync personal hooks and scripts from plugin"
+  echo "  9. Set up Deck Designer"
   echo ""
   echo "This takes about 5-10 minutes."
   echo "---------------------------------------------"
@@ -388,6 +389,232 @@ install_plugin() {
   fi
 }
 
+# ─── Sync Infrastructure ─────────────────────────────────────────────────────
+
+sync_infrastructure_from_plugin() {
+  echo ""
+  echo "✓ Syncing infrastructure hooks and scripts..."
+
+  # Locate the most recently modified version directory in the plugin cache
+  local PLUGIN_ROOT
+  PLUGIN_ROOT="$(ls -td "$HOME/.claude/plugins/cache/tempus-claude/tempus-marketing/"*/ 2>/dev/null | head -1 || true)"
+
+  if [[ -z "$PLUGIN_ROOT" ]] || [[ ! -d "$PLUGIN_ROOT" ]]; then
+    echo "  Warning: Plugin cache not found — skipping infrastructure sync."
+    echo "  Re-run this installer after the plugin installs to sync hooks."
+    return 0
+  fi
+
+  # Filenames that must never be overwritten (personal-only hooks)
+  local -a ALLOWLIST=(
+    "block_screenshot.sh"
+  )
+
+  _in_allowlist() {
+    local fname="$1"
+    local entry
+    for entry in "${ALLOWLIST[@]}"; do
+      [[ "$fname" == "$entry" ]] && return 0
+    done
+    return 1
+  }
+
+  # ── Sync hooks ──────────────────────────────────────────────────────────────
+  mkdir -p "$HOME/.claude/hooks"
+  local hooks_copied=0
+
+  for src in "$PLUGIN_ROOT/hooks/"*.sh "$PLUGIN_ROOT/hooks/"*.py; do
+    [[ -f "$src" ]] || continue
+    local fname="${src##*/}"
+
+    # Skip hooks.json (not a .sh or .py, so won't match), skip allowlisted names
+    if _in_allowlist "$fname"; then
+      continue
+    fi
+
+    # Rewrite ${CLAUDE_PLUGIN_ROOT} → absolute $HOME/.claude
+    local dest="$HOME/.claude/hooks/$fname"
+    sed "s|\${CLAUDE_PLUGIN_ROOT}|$HOME/.claude|g" "$src" > "$dest"
+    chmod +x "$dest"
+    hooks_copied=$((hooks_copied + 1))
+  done
+
+  echo "  ✓ $hooks_copied hooks copied to ~/.claude/hooks/"
+
+  # ── Sync scripts ─────────────────────────────────────────────────────────────
+  mkdir -p "$HOME/.claude/scripts"
+  local scripts_copied=0
+
+  for src in "$PLUGIN_ROOT/scripts/"*.cjs "$PLUGIN_ROOT/scripts/"*.sh; do
+    [[ -f "$src" ]] || continue
+    local fname="${src##*/}"
+    local dest="$HOME/.claude/scripts/$fname"
+    sed "s|\${CLAUDE_PLUGIN_ROOT}|$HOME/.claude|g" "$src" > "$dest"
+    chmod +x "$dest"
+    scripts_copied=$((scripts_copied + 1))
+  done
+
+  echo "  ✓ $scripts_copied scripts copied to ~/.claude/scripts/"
+
+  # ── Merge settings.json hook wirings ────────────────────────────────────────
+
+  # Ensure jq is available
+  if ! command -v jq &>/dev/null; then
+    echo ""
+    echo "  Installing jq (needed for settings.json hook wiring)..."
+    if ! brew install jq >/dev/null 2>&1; then
+      echo ""
+      echo "  Warning: jq could not be installed. Please add the following"
+      echo "  hook wirings to ~/.claude/settings.json manually:"
+      echo ""
+      echo "  UserPromptSubmit: $HOME/.claude/hooks/tldr_reminder.sh (timeout 5)"
+      echo "  Stop: /opt/homebrew/bin/node $HOME/.claude/scripts/supermemory-save.cjs (timeout 30)"
+      echo "  Stop: /usr/bin/env python3 $HOME/.claude/hooks/tldr_length_check.py (timeout 5)"
+      echo "  Stop: /usr/bin/env python3 $HOME/.claude/hooks/post_plan_silence_check.py (timeout 5)"
+      return 0
+    fi
+  fi
+
+  local SETTINGS="$HOME/.claude/settings.json"
+
+  # Create minimal settings.json if it doesn't exist
+  if [[ ! -f "$SETTINGS" ]]; then
+    cat > "$SETTINGS" <<SETTINGS_EOF
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/tldr_reminder.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/homebrew/bin/node $HOME/.claude/scripts/supermemory-save.cjs",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "/usr/bin/env python3 $HOME/.claude/hooks/tldr_length_check.py",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "/usr/bin/env python3 $HOME/.claude/hooks/post_plan_silence_check.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+SETTINGS_EOF
+    echo "  ✓ settings.json hook wirings created"
+    return 0
+  fi
+
+  # settings.json exists — use jq to merge canonical wirings while preserving all other keys.
+  #
+  # Strategy: for UserPromptSubmit[0].hooks and Stop[0].hooks, remove any existing entries
+  # whose command contains "$HOME/.claude/hooks/" or "$HOME/.claude/scripts/" (old managed
+  # copies), then append the canonical entries. This is idempotent and safe.
+
+  local HOME_ESC
+  HOME_ESC="$(printf '%s' "$HOME" | sed 's/[\/&]/\\&/g')"
+
+  # Build the canonical entries as JSON for injection
+  local CANONICAL_UPS_ENTRY
+  CANONICAL_UPS_ENTRY=$(jq -n \
+    --arg cmd "$HOME/.claude/hooks/tldr_reminder.sh" \
+    '{"type":"command","command":$cmd,"timeout":5}')
+
+  local CANONICAL_STOP_ENTRY_1
+  CANONICAL_STOP_ENTRY_1=$(jq -n \
+    --arg cmd "/opt/homebrew/bin/node $HOME/.claude/scripts/supermemory-save.cjs" \
+    '{"type":"command","command":$cmd,"timeout":30}')
+
+  local CANONICAL_STOP_ENTRY_2
+  CANONICAL_STOP_ENTRY_2=$(jq -n \
+    --arg cmd "/usr/bin/env python3 $HOME/.claude/hooks/tldr_length_check.py" \
+    '{"type":"command","command":$cmd,"timeout":5}')
+
+  local CANONICAL_STOP_ENTRY_3
+  CANONICAL_STOP_ENTRY_3=$(jq -n \
+    --arg cmd "/usr/bin/env python3 $HOME/.claude/hooks/post_plan_silence_check.py" \
+    '{"type":"command","command":$cmd,"timeout":5}')
+
+  local TMPFILE
+  TMPFILE="$(mktemp /tmp/tempus-settings-XXXXXX.json)"
+
+  # jq script:
+  # 1. Ensure .hooks exists
+  # 2. Ensure .hooks.UserPromptSubmit is an array with at least one entry
+  # 3. In UPS[0].hooks: remove old tempus-managed entries then append canonical one
+  # 4. Ensure .hooks.Stop is an array with at least one entry
+  # 5. In Stop[0].hooks: remove old tempus-managed entries then append the three canonical ones
+  jq \
+    --argjson ups_entry "$CANONICAL_UPS_ENTRY" \
+    --argjson stop1 "$CANONICAL_STOP_ENTRY_1" \
+    --argjson stop2 "$CANONICAL_STOP_ENTRY_2" \
+    --argjson stop3 "$CANONICAL_STOP_ENTRY_3" \
+    --arg home "$HOME" \
+    '
+    # Helper: does a command string belong to tempus-managed personal hooks/scripts?
+    def is_tempus_managed($home):
+      .command | (
+        test($home + "/.claude/hooks/tldr_reminder.sh") or
+        test($home + "/.claude/hooks/tldr_length_check.py") or
+        test($home + "/.claude/hooks/post_plan_silence_check.py") or
+        test($home + "/.claude/scripts/supermemory-save.cjs")
+      );
+
+    # Ensure .hooks exists
+    .hooks //= {}
+
+    # ── UserPromptSubmit ──────────────────────────────────────────────────────
+    | .hooks.UserPromptSubmit //= [{}]
+    | if (.hooks.UserPromptSubmit | length) == 0 then .hooks.UserPromptSubmit = [{}] else . end
+    | .hooks.UserPromptSubmit[0].hooks //= []
+    # Remove stale tempus-managed entries, then append canonical one
+    | .hooks.UserPromptSubmit[0].hooks |= (
+        [ .[] | select(is_tempus_managed($home) | not) ]
+        + [$ups_entry]
+      )
+
+    # ── Stop ─────────────────────────────────────────────────────────────────
+    | .hooks.Stop //= [{}]
+    | if (.hooks.Stop | length) == 0 then .hooks.Stop = [{}] else . end
+    | .hooks.Stop[0].hooks //= []
+    # Remove stale tempus-managed entries, then append canonical three
+    | .hooks.Stop[0].hooks |= (
+        [ .[] | select(is_tempus_managed($home) | not) ]
+        + [$stop1, $stop2, $stop3]
+      )
+    ' "$SETTINGS" > "$TMPFILE"
+
+  if [[ $? -eq 0 ]] && [[ -s "$TMPFILE" ]]; then
+    mv "$TMPFILE" "$SETTINGS"
+    echo "  ✓ settings.json hook wirings updated"
+  else
+    rm -f "$TMPFILE"
+    echo ""
+    echo "  Warning: Could not safely merge settings.json hook wirings."
+    echo "  Please add the following entries manually:"
+    echo "    UserPromptSubmit: $HOME/.claude/hooks/tldr_reminder.sh (timeout 5)"
+    echo "    Stop: /opt/homebrew/bin/node $HOME/.claude/scripts/supermemory-save.cjs (timeout 30)"
+    echo "    Stop: /usr/bin/env python3 $HOME/.claude/hooks/tldr_length_check.py (timeout 5)"
+    echo "    Stop: /usr/bin/env python3 $HOME/.claude/hooks/post_plan_silence_check.py (timeout 5)"
+  fi
+}
+
 # ─── CLAUDE.md ───────────────────────────────────────────────────────────────
 
 setup_claude_md() {
@@ -535,6 +762,7 @@ setup_github_auth
 verify_repo_access
 backup_existing_setup
 install_plugin
+sync_infrastructure_from_plugin
 setup_claude_md
 setup_decks_folder
 install_skill
