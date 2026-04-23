@@ -295,7 +295,13 @@ install_plugin() {
   echo ""
   echo "Adding the Tempus plugin marketplace..."
 
-  claude plugin marketplace add grovertempus/tempus-claude 2>/dev/null || true
+  # If a prior install registered the marketplace via SSH, remove it so the HTTPS re-add takes effect
+  if claude plugin marketplace list 2>/dev/null | grep -q "git@github.com:grovertempus/tempus-claude"; then
+    claude plugin marketplace remove tempus-claude 2>/dev/null || true
+  fi
+
+  # Use explicit HTTPS URL so users without GitHub SSH keys can still clone the private marketplace
+  claude plugin marketplace add https://github.com/grovertempus/tempus-claude.git 2>/dev/null || true
   if ! claude plugin marketplace update tempus-claude 2>/dev/null; then
     die "Could not refresh the Tempus plugin marketplace."
   fi
