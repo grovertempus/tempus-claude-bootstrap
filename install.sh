@@ -234,7 +234,7 @@ install_claude_cli() {
   fi
 
   echo "Installing Claude Code CLI via npm..."
-  if ! npm install -g @anthropic-ai/claude-code >/dev/null 2>&1; then
+  if ! npm install -g @anthropic-ai/claude-code@2.1.100 >/dev/null 2>&1; then
     die "Could not install Claude Code. Check your internet connection and try again."
   fi
 
