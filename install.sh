@@ -220,33 +220,29 @@ install_gh() {
 # ─── Claude Code CLI ─────────────────────────────────────────────────────────
 
 install_claude_cli() {
-  # Check if claude is already installed on the stable channel
-  if command -v claude &>/dev/null; then
-    local current_version
-    current_version="$(claude --version 2>/dev/null || true)"
-    if echo "$current_version" | grep -qi "stable"; then
-      echo "✓ Claude Code already on stable, skipping"
-      return 0
-    fi
-    # Non-stable version present — replace it
-    echo "  Detected non-stable Claude version: $current_version"
-    if [[ -f "$HOME/.local/bin/claude" ]]; then
-      echo "  Replacing non-stable binary at ~/.local/bin/claude with stable..."
-      python3 -c "import os; os.remove(os.path.expanduser('~/.local/bin/claude'))"
-    fi
+  # The native Claude Code binary (Mach-O at ~/.local/bin/claude) has a known
+  # bug on macOS Tahoe (26.x) that causes infinite CPU loops on startup.
+  # Always use npm install and remove the native binary if present.
+  if [[ -f "$HOME/.local/bin/claude" ]]; then
+    echo "  Removing native binary (incompatible with macOS Tahoe)..."
+    rm -f "$HOME/.local/bin/claude"
   fi
 
-  echo "Installing Claude Code CLI (stable channel)..."
-  curl -fsSL https://claude.ai/install.sh | bash -s stable
+  if command -v claude &>/dev/null; then
+    echo "✓ Claude Code CLI ready"
+    return 0
+  fi
 
-  # Source the updated PATH
-  export PATH="$HOME/.local/bin:$HOME/.claude/bin:$PATH"
+  echo "Installing Claude Code CLI via npm..."
+  if ! npm install -g @anthropic-ai/claude-code >/dev/null 2>&1; then
+    die "Could not install Claude Code. Check your internet connection and try again."
+  fi
 
   if ! command -v claude &>/dev/null; then
     die "Claude Code CLI installation failed."
   fi
 
-  echo "✓ Claude Code CLI ready (stable channel)"
+  echo "✓ Claude Code CLI ready"
 }
 
 # ─── GitHub Auth ─────────────────────────────────────────────────────────────
