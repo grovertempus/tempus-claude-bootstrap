@@ -66,6 +66,21 @@ After it finishes, open VS Code, click the sparkle icon, and sign in with **Anth
 
 ---
 
+## Stable channel pin
+
+`install.sh` pins Claude Code to the **stable release channel** and disables the auto-updater. Two settings.json entries are written automatically:
+
+```json
+{
+  "autoUpdatesChannel": "stable",
+  "env": { "DISABLE_AUTOUPDATER": "1" }
+}
+```
+
+**Why:** Recent bleeding-edge builds of Claude Code freeze on macOS Tahoe (26.x) due to a PAC/Bun runtime bug (GitHub issues #23008, #19068). The stable channel trails by about a week and skips releases with major regressions. The auto-updater is disabled so background updates cannot silently pull in a broken version. Do not revert these to bleeding-edge defaults.
+
+---
+
 ## Questions?
 
 Email Grover at grover.richardson@tempus.com

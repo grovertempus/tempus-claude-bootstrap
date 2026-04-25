@@ -220,22 +220,33 @@ install_gh() {
 # ─── Claude Code CLI ─────────────────────────────────────────────────────────
 
 install_claude_cli() {
+  # Check if claude is already installed on the stable channel
   if command -v claude &>/dev/null; then
-    echo "✓ Claude Code CLI ready"
-    return 0
+    local current_version
+    current_version="$(claude --version 2>/dev/null || true)"
+    if echo "$current_version" | grep -qi "stable"; then
+      echo "✓ Claude Code already on stable, skipping"
+      return 0
+    fi
+    # Non-stable version present — replace it
+    echo "  Detected non-stable Claude version: $current_version"
+    if [[ -f "$HOME/.local/bin/claude" ]]; then
+      echo "  Replacing non-stable binary at ~/.local/bin/claude with stable..."
+      python3 -c "import os; os.remove(os.path.expanduser('~/.local/bin/claude'))"
+    fi
   fi
 
-  echo "Installing Claude Code CLI..."
-  curl -fsSL https://claude.ai/install.sh | bash
+  echo "Installing Claude Code CLI (stable channel)..."
+  curl -fsSL https://claude.ai/install.sh | bash -s stable
 
   # Source the updated PATH
-  export PATH="$HOME/.claude/bin:$PATH"
+  export PATH="$HOME/.local/bin:$HOME/.claude/bin:$PATH"
 
   if ! command -v claude &>/dev/null; then
     die "Claude Code CLI installation failed."
   fi
 
-  echo "✓ Claude Code CLI ready"
+  echo "✓ Claude Code CLI ready (stable channel)"
 }
 
 # ─── GitHub Auth ─────────────────────────────────────────────────────────────
@@ -510,6 +521,10 @@ sync_infrastructure_from_plugin() {
   if [[ ! -f "$SETTINGS" ]]; then
     cat > "$SETTINGS" <<SETTINGS_EOF
 {
+  "autoUpdatesChannel": "stable",
+  "env": {
+    "DISABLE_AUTOUPDATER": "1"
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -546,7 +561,7 @@ sync_infrastructure_from_plugin() {
   }
 }
 SETTINGS_EOF
-    echo "  ✓ settings.json hook wirings created"
+    echo "  ✓ settings.json created (stable channel pinned, auto-updater disabled)"
     return 0
   fi
 
@@ -641,6 +656,35 @@ SETTINGS_EOF
     echo "    Stop: /opt/homebrew/bin/node $HOME/.claude/scripts/supermemory-save.cjs (timeout 30)"
     echo "    Stop: /usr/bin/env python3 $HOME/.claude/hooks/tldr_length_check.py (timeout 5)"
     echo "    Stop: /usr/bin/env python3 $HOME/.claude/hooks/post_plan_silence_check.py (timeout 5)"
+  fi
+
+  # ── Pin stable channel and disable auto-updater ──────────────────────────────
+  # Protects against background updates pulling in broken builds (e.g., Tahoe PAC freeze).
+
+  local SETTINGS_BACKUP="$SETTINGS.backup-$(date +%s)"
+  if [[ -f "$SETTINGS" ]]; then
+    cp "$SETTINGS" "$SETTINGS_BACKUP"
+  fi
+
+  local AUTOUPDATE_TMPFILE
+  AUTOUPDATE_TMPFILE="$(mktemp /tmp/tempus-settings-autoupdate-XXXXXX.json)"
+
+  jq \
+    '. + {"autoUpdatesChannel": "stable"} |
+     .env //= {} |
+     .env += {"DISABLE_AUTOUPDATER": "1"}' \
+    "$SETTINGS" > "$AUTOUPDATE_TMPFILE"
+
+  if [[ $? -eq 0 ]] && [[ -s "$AUTOUPDATE_TMPFILE" ]]; then
+    mv "$AUTOUPDATE_TMPFILE" "$SETTINGS"
+    echo "  ✓ settings.json: stable channel pinned, auto-updater disabled"
+    echo "    (Backup saved to: $SETTINGS_BACKUP)"
+  else
+    rm -f "$AUTOUPDATE_TMPFILE"
+    echo ""
+    echo "  Warning: Could not write auto-updater settings. Add manually to ~/.claude/settings.json:"
+    echo '    "autoUpdatesChannel": "stable"'
+    echo '    "env": { "DISABLE_AUTOUPDATER": "1" }'
   fi
 }
 
